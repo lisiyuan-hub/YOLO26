@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class TransformerEncoderLayer(nn.Module):
     """Defines a single layer of the transformer encoder."""
 
