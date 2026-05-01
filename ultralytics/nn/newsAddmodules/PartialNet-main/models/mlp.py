@@ -1,16 +1,18 @@
-""" MLP module w/ dropout and configurable activation layer
+"""MLP module w/ dropout and configurable activation layer.
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+
 from functools import partial
+
 import torch
+from timm.layers.helpers import to_2tuple
 from torch import nn as nn
 
-from timm.layers.helpers import to_2tuple
 
 class GlobalResponseNorm(nn.Module):
-    """ Global Response Normalization layer
-    """
+    """Global Response Normalization layer."""
+
     def __init__(self, dim, eps=1e-6, channels_last=True):
         super().__init__()
         self.eps = eps
@@ -30,20 +32,21 @@ class GlobalResponseNorm(nn.Module):
         x_g = x.norm(p=2, dim=self.spatial_dim, keepdim=True)
         x_n = x_g / (x_g.mean(dim=self.channel_dim, keepdim=True) + self.eps)
         return x + torch.addcmul(self.bias.view(self.wb_shape), self.weight.view(self.wb_shape), x * x_n)
-    
+
+
 class Mlp(nn.Module):
-    """ MLP as used in Vision Transformer, MLP-Mixer and related networks
-    """
+    """MLP as used in Vision Transformer, MLP-Mixer and related networks."""
+
     def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            norm_layer=None,
-            bias=True,
-            drop=0.,
-            use_conv=False,
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.GELU,
+        norm_layer=None,
+        bias=True,
+        drop=0.0,
+        use_conv=False,
     ):
         super().__init__()
         out_features = out_features or in_features
@@ -70,20 +73,20 @@ class Mlp(nn.Module):
 
 
 class GluMlp(nn.Module):
-    """ MLP w/ GLU style gating
-    See: https://arxiv.org/abs/1612.08083, https://arxiv.org/abs/2002.05202
+    """MLP w/ GLU style gating See: https://arxiv.org/abs/1612.08083, https://arxiv.org/abs/2002.05202.
     """
+
     def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.Sigmoid,
-            norm_layer=None,
-            bias=True,
-            drop=0.,
-            use_conv=False,
-            gate_last=True,
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.Sigmoid,
+        norm_layer=None,
+        bias=True,
+        drop=0.0,
+        use_conv=False,
+        gate_last=True,
     ):
         super().__init__()
         out_features = out_features or in_features
@@ -123,19 +126,19 @@ SwiGLUPacked = partial(GluMlp, act_layer=nn.SiLU, gate_last=False)
 
 
 class SwiGLU(nn.Module):
-    """ SwiGLU
-    NOTE: GluMLP above can implement SwiGLU, but this impl has split fc1 and
-    better matches some other common impl which makes mapping checkpoints simpler.
+    """SwiGLU NOTE: GluMLP above can implement SwiGLU, but this impl has split fc1 and better matches some other common
+    impl which makes mapping checkpoints simpler.
     """
+
     def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.SiLU,
-            norm_layer=None,
-            bias=True,
-            drop=0.,
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.SiLU,
+        norm_layer=None,
+        bias=True,
+        drop=0.0,
     ):
         super().__init__()
         out_features = out_features or in_features
@@ -168,18 +171,18 @@ class SwiGLU(nn.Module):
 
 
 class GatedMlp(nn.Module):
-    """ MLP as used in gMLP
-    """
+    """MLP as used in gMLP."""
+
     def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            norm_layer=None,
-            gate_layer=None,
-            bias=True,
-            drop=0.,
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.GELU,
+        norm_layer=None,
+        gate_layer=None,
+        bias=True,
+        drop=0.0,
     ):
         super().__init__()
         out_features = out_features or in_features
@@ -212,17 +215,17 @@ class GatedMlp(nn.Module):
 
 
 class ConvMlp(nn.Module):
-    """ MLP using 1x1 convs that keeps spatial dims
-    """
+    """MLP using 1x1 convs that keeps spatial dims."""
+
     def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.ReLU,
-            norm_layer=None,
-            bias=True,
-            drop=0.,
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.ReLU,
+        norm_layer=None,
+        bias=True,
+        drop=0.0,
     ):
         super().__init__()
         out_features = out_features or in_features
@@ -245,17 +248,17 @@ class ConvMlp(nn.Module):
 
 
 class GlobalResponseNormMlp(nn.Module):
-    """ MLP w/ Global Response Norm (see grn.py), nn.Linear or 1x1 Conv2d
-    """
+    """MLP w/ Global Response Norm (see grn.py), nn.Linear or 1x1 Conv2d."""
+
     def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            bias=True,
-            drop=0.,
-            use_conv=False,
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.GELU,
+        bias=True,
+        drop=0.0,
+        use_conv=False,
     ):
         super().__init__()
         out_features = out_features or in_features

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
     """Pad to 'same' shape outputs."""
     if d > 1:
@@ -30,15 +31,16 @@ class Conv(nn.Module):
         """Perform transposed convolution of 2D data."""
         return self.act(self.conv(x))
 
+
 class EUCB(nn.Module):
     def __init__(self, in_channels, kernel_size=3, stride=1):
-        super(EUCB,self).__init__()
+        super().__init__()
 
         self.in_channels = in_channels
         self.out_channels = in_channels
         self.up_dwc = nn.Sequential(
             nn.Upsample(scale_factor=2),
-            Conv(self.in_channels, self.in_channels, kernel_size, g=self.in_channels, s=stride)
+            Conv(self.in_channels, self.in_channels, kernel_size, g=self.in_channels, s=stride),
         )
         self.pwc = nn.Sequential(
             nn.Conv2d(self.in_channels, self.out_channels, kernel_size=1, stride=1, padding=0, bias=True)
@@ -49,7 +51,7 @@ class EUCB(nn.Module):
         x = self.channel_shuffle(x, self.in_channels)
         x = self.pwc(x)
         return x
-    
+
     def channel_shuffle(self, x, groups):
         batchsize, num_channels, height, width = x.data.size()
         channels_per_group = num_channels // groups
