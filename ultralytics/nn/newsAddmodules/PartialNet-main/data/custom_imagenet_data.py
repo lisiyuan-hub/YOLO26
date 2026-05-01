@@ -1,17 +1,17 @@
 # type: ignore[override]
-import os
-from typing import Any, Callable, Optional
+from __future__ import annotations
 
+import os
+from typing import Any, Callable
+
+from pl_bolts.transforms.dataset_normalizations import cifar10_normalization, imagenet_normalization
+from pl_bolts.utils import _TORCHVISION_AVAILABLE
+from pl_bolts.utils.warnings import warn_missing_pkg
 from pytorch_lightning import LightningDataModule
+from timm.data import create_transform
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from utils.utils import *
-
-from pl_bolts.transforms.dataset_normalizations import imagenet_normalization, cifar10_normalization
-from pl_bolts.utils import _TORCHVISION_AVAILABLE
-from pl_bolts.utils.warnings import warn_missing_pkg
-
-from timm.data import create_transform
 
 if _TORCHVISION_AVAILABLE:
     from torchvision import transforms
@@ -20,10 +20,7 @@ else:  # pragma: no cover
 
 
 class custom_DataModule(LightningDataModule):
-    """
-    The train set is the imagenet train.
-    The val/test set are the official imagenet validation set.
-
+    """The train set is the imagenet train. The val/test set are the official imagenet validation set.
     """
 
     name = "imagenet"
@@ -32,7 +29,7 @@ class custom_DataModule(LightningDataModule):
         self,
         dataset_name: str,
         data_dir: str,
-        meta_dir: Optional[str] = None,
+        meta_dir: str | None = None,
         image_size: int = 224,
         num_workers: int = 0,
         batch_size: int = 32,
@@ -40,10 +37,10 @@ class custom_DataModule(LightningDataModule):
         # dist_eval: bool = True,
         pin_memory: bool = True,
         drop_last: bool = False,
-        train_transforms = None,
-        val_transforms = None,
-        train_transforms_multi_scale = None,
-        scaling_epoch = None,
+        train_transforms=None,
+        val_transforms=None,
+        train_transforms_multi_scale=None,
+        scaling_epoch=None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -56,12 +53,14 @@ class custom_DataModule(LightningDataModule):
             num_workers: how many data workers
             batch_size: batch_size
             pin_memory: If true, the data loader will copy Tensors into CUDA pinned memory before returning them
-            drop_last: If true drops the last incomplete batch
+            drop_last: If true drops the last incomplete batch.
         """
         super().__init__(*args, **kwargs)
 
         if not _TORCHVISION_AVAILABLE:  # pragma: no cover
-            raise ModuleNotFoundError("You want to use ImageNet dataset loaded from `torchvision` which is not installed yet.")
+            raise ModuleNotFoundError(
+                "You want to use ImageNet dataset loaded from `torchvision` which is not installed yet."
+            )
         self.dataset_name = dataset_name
         self.image_size = image_size
         self.dims = (3, self.image_size, self.image_size)
@@ -83,54 +82,63 @@ class custom_DataModule(LightningDataModule):
 
     @property
     def num_classes(self) -> int:
-        if self.dataset_name == 'imagenet':
+        if self.dataset_name == "imagenet":
             return 1000
-        elif self.dataset_name == 'cifar10':
+        elif self.dataset_name == "cifar10":
             return 10
 
     def _verify_splits(self, data_dir: str, split: str) -> None:
         dirs = os.listdir(data_dir)
 
-        if split not in dirs and self.dataset_name == 'imagenet':
+        if split not in dirs and self.dataset_name == "imagenet":
             raise FileNotFoundError(
                 f"a {split} Imagenet split was not found in {data_dir},"
                 f" make sure the folder contains a subfolder named {split}"
             )
 
     def prepare_data(self) -> None:
-        """This method already assumes you have imagenet2012 downloaded. It validates the data using the meta.bin.
-        .. warning:: Please download imagenet on your own first.
-        To get imagenet:
-        1. download yourself from http://www.image-net.org/challenges/LSVRC/2012/downloads
-        2. download the devkit (ILSVRC2012_devkit_t12.tar.gz)
+        """This method already assumes you have imagenet2012 downloaded. It validates the data using the meta.bin. ..
+        warning:: Please download imagenet on your own first. To get imagenet: 1. download yourself from
+        http://www.image-net.org/challenges/LSVRC/2012/downloads 2. download the
+        devkit (ILSVRC2012_devkit_t12.tar.gz).
         """
         self._verify_splits(self.data_dir, "train")
         self._verify_splits(self.data_dir, "val")
 
-    def setup(self, stage: Optional[str] = None) -> None:
+    def setup(self, stage: str | None = None) -> None:
         """Creates train, val, and test dataset."""
         if stage == "fit" or stage is None:
             train_transforms = self.train_transform() if self.train_transforms is None else self.train_transforms
             val_transforms = self.val_transform() if self.val_transforms is None else self.val_transforms
 
-            if self.dataset_name == 'imagenet':
-                self.dataset_train = datasets.ImageFolder(os.path.join(self.data_dir, 'train'), transform=train_transforms)
-                self.dataset_val = datasets.ImageFolder(os.path.join(self.data_dir, 'val'), transform=val_transforms)
-            elif self.dataset_name == 'cifar10':
-                self.dataset_train = datasets.CIFAR10(root=self.data_dir, train=True, transform=train_transforms, download=False)
-                self.dataset_val = datasets.CIFAR10(root=self.data_dir, train=False, transform=val_transforms, download=False)
+            if self.dataset_name == "imagenet":
+                self.dataset_train = datasets.ImageFolder(
+                    os.path.join(self.data_dir, "train"), transform=train_transforms
+                )
+                self.dataset_val = datasets.ImageFolder(os.path.join(self.data_dir, "val"), transform=val_transforms)
+            elif self.dataset_name == "cifar10":
+                self.dataset_train = datasets.CIFAR10(
+                    root=self.data_dir, train=True, transform=train_transforms, download=False
+                )
+                self.dataset_val = datasets.CIFAR10(
+                    root=self.data_dir, train=False, transform=val_transforms, download=False
+                )
 
             if self.train_transforms_multi_scale is not None:
-                self.dataset_train_multi_scale = datasets.ImageFolder(os.path.join(self.data_dir, 'train'), transform=self.train_transforms_multi_scale)
+                self.dataset_train_multi_scale = datasets.ImageFolder(
+                    os.path.join(self.data_dir, "train"), transform=self.train_transforms_multi_scale
+                )
             else:
                 self.dataset_train_multi_scale = None
 
         if stage == "test" or stage is None:
             val_transforms = self.val_transform() if self.val_transforms is None else self.val_transforms
-            if self.dataset_name == 'imagenet':
-                self.dataset_test = datasets.ImageFolder(os.path.join(self.data_dir, 'val'), transform=val_transforms)
-            elif self.dataset_name == 'cifar10':
-                self.dataset_test = datasets.CIFAR10(root=self.data_dir, train=False, transform=val_transforms, download=False)
+            if self.dataset_name == "imagenet":
+                self.dataset_test = datasets.ImageFolder(os.path.join(self.data_dir, "val"), transform=val_transforms)
+            elif self.dataset_name == "cifar10":
+                self.dataset_test = datasets.CIFAR10(
+                    root=self.data_dir, train=False, transform=val_transforms, download=False
+                )
 
     def train_dataloader(self) -> DataLoader:
         if self.dataset_train_multi_scale is not None and self.trainer.current_epoch < self.scaling_epoch:
@@ -146,7 +154,7 @@ class custom_DataModule(LightningDataModule):
             shuffle=True,
             num_workers=self.num_workers,
             drop_last=self.drop_last,
-            pin_memory=self.pin_memory
+            pin_memory=self.pin_memory,
         )
         return loader
 
@@ -158,7 +166,7 @@ class custom_DataModule(LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             drop_last=False,
-            pin_memory=self.pin_memory
+            pin_memory=self.pin_memory,
         )
         return loader
 
@@ -171,41 +179,44 @@ class custom_DataModule(LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             drop_last=False,
-            pin_memory=self.pin_memory
+            pin_memory=self.pin_memory,
         )
         return loader
 
     def train_transform(self) -> Callable:
-        if self.dataset_name == 'imagenet':
-            preprocessing = transforms.Compose([
+        if self.dataset_name == "imagenet":
+            preprocessing = transforms.Compose(
+                [
                     transforms.RandomResizedCrop(self.image_size),
                     transforms.RandomHorizontalFlip(),
                     transforms.ToTensor(),
                     imagenet_normalization(),
-                ])
-        elif self.dataset_name == 'cifar10':
-            preprocessing = transforms.Compose([
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomCrop(32, padding=4),
-                transforms.ToTensor(),
-                cifar10_normalization(),
-                ])
+                ]
+            )
+        elif self.dataset_name == "cifar10":
+            preprocessing = transforms.Compose(
+                [
+                    transforms.RandomHorizontalFlip(),
+                    transforms.RandomCrop(32, padding=4),
+                    transforms.ToTensor(),
+                    cifar10_normalization(),
+                ]
+            )
 
         return preprocessing
 
     def val_transform(self) -> Callable:
-        if self.dataset_name == 'imagenet':
-            preprocessing = transforms.Compose([
+        if self.dataset_name == "imagenet":
+            preprocessing = transforms.Compose(
+                [
                     transforms.Resize(self.image_size + 32),
                     transforms.CenterCrop(self.image_size),
                     transforms.ToTensor(),
                     imagenet_normalization(),
-                ])
-        elif self.dataset_name == 'cifar10':
-            preprocessing = transforms.Compose([
-                transforms.ToTensor(), 
-                cifar10_normalization()
-                ])
+                ]
+            )
+        elif self.dataset_name == "cifar10":
+            preprocessing = transforms.Compose([transforms.ToTensor(), cifar10_normalization()])
 
         return preprocessing
 
@@ -234,18 +245,20 @@ def build_transform(is_train, args, image_size):
     if resize_im:
         # warping (no cropping) when evaluated at 384 or larger
         if image_size >= 384:
-            t.append(transforms.Resize((image_size, image_size), 
-                                       interpolation=transforms.InterpolationMode.BICUBIC),
-                                       )
+            t.append(
+                transforms.Resize((image_size, image_size), interpolation=transforms.InterpolationMode.BICUBIC),
+            )
             print(f"Warping {image_size} size input images...")
         else:
             # size = int((256 / 224) * image_size)
-            size = int(1.0*image_size/args.test_crop_ratio)
+            size = int(1.0 * image_size / args.test_crop_ratio)
             t.append(
-                transforms.Resize(size, interpolation=transforms.InterpolationMode.BICUBIC),  # to maintain same ratio w.r.t. 224 images
+                transforms.Resize(
+                    size, interpolation=transforms.InterpolationMode.BICUBIC
+                ),  # to maintain same ratio w.r.t. 224 images
             )
             t.append(transforms.CenterCrop(image_size))
-    
+
     t.append(transforms.ToTensor())
     if image_size == 32:
         # size = int(1.0*image_size/args.test_crop_ratio)
