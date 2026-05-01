@@ -1,22 +1,23 @@
 """The implementation of iRPE (image relative position encoding)."""
-from easydict import EasyDict as edict
+
 import math
-import numpy as np
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from easydict import EasyDict as edict
+
 # try:
 #     from rpe_ops.rpe_index import RPEIndexFunction
 # except ImportError as e:
 RPEIndexFunction = None
-    # import warnings
-    # RED_STR = "\033[91m{}\033[00m"
-    # warnings.warn(RED_STR.format("[WARNING] The module `rpe_ops` is not built. For better training performance, please build `rpe_ops`."),)
+# import warnings
+# RED_STR = "\033[91m{}\033[00m"
+# warnings.warn(RED_STR.format("[WARNING] The module `rpe_ops` is not built. For better training performance, please build `rpe_ops`."),)
 
 
 @torch.no_grad()
 def piecewise_index(relative_position, alpha, beta, gamma, dtype):
-    """piecewise index function defined in Eq. (18) in our paper.
+    """Piecewise index function defined in Eq. (18) in our paper.
 
     Parameters
     ----------
@@ -25,21 +26,20 @@ def piecewise_index(relative_position, alpha, beta, gamma, dtype):
     alpha, beta, gamma: float
         The coefficients of piecewise index function.
 
-    Returns
-    -------
-    idx: torch.Tensor, dtype: long
-        A tensor indexing relative distances to corresponding encodings.
-        `idx` is a long tensor, whose shape is (L, L) and each element is in [-beta, beta].
+    Returns:
+        -------
+        idx: torch.Tensor, dtype: long A tensor indexing relative distances to corresponding encodings. `idx` is a long
+            tensor, whose shape is (L, L) and each element is in [-beta, beta].
     """
     rp_abs = relative_position.abs()
     mask = rp_abs <= alpha
     not_mask = ~mask
     rp_out = relative_position[not_mask]
     rp_abs_out = rp_abs[not_mask]
-    y_out = (torch.sign(rp_out) * (alpha +
-                                   torch.log(rp_abs_out / alpha) /
-                                   math.log(gamma / alpha) *
-                                   (beta - alpha)).round().clip(max=beta)).to(dtype)
+    y_out = (
+        torch.sign(rp_out)
+        * (alpha + torch.log(rp_abs_out / alpha) / math.log(gamma / alpha) * (beta - alpha)).round().clip(max=beta)
+    ).to(dtype)
 
     idx = relative_position.clone()
     if idx.dtype in [torch.float32, torch.float64]:
@@ -52,13 +52,9 @@ def piecewise_index(relative_position, alpha, beta, gamma, dtype):
 
 
 def get_absolute_positions(height, width, dtype, device):
-    '''Get absolute positions
+    """Get absolute positions.
 
-    Take height = 3, width = 3 as an example:
-    rows:        cols:
-    1 1 1        1 2 3
-    2 2 2        1 2 3
-    3 3 3        1 2 3
+    Take height = 3, width = 3 as an example: rows: cols: 1 1 1 1 2 3 2 2 2 1 2 3 3 3 3 1 2 3
 
     return stack([rows, cols], 2)
 
@@ -71,16 +67,14 @@ def get_absolute_positions(height, width, dtype, device):
     device: torch.device
         the device of returned value
 
-    Return
-    ------
-    2D absolute positions: torch.Tensor
+    Returns:
+        ------
+        2D absolute positions: torch.Tensor
         The shape is (height, width, 2),
         where 2 represents a 2D position (row, col).
-    '''
-    rows = torch.arange(height, dtype=dtype, device=device).view(
-        height, 1).repeat(1, width)
-    cols = torch.arange(width, dtype=dtype, device=device).view(
-        1, width).repeat(height, 1)
+    """
+    rows = torch.arange(height, dtype=dtype, device=device).view(height, 1).repeat(1, width)
+    cols = torch.arange(width, dtype=dtype, device=device).view(1, width).repeat(height, 1)
     return torch.stack([rows, cols], 2)
 
 
@@ -93,20 +87,17 @@ def quantize_values(values):
     values: torch.Tensor, dtype: long or float
         arbitrary shape
 
-    Returns
-    -------
-    res: torch.Tensor, dtype: long
-        The quantization result starts at 0.
-        The shape is the same as that of `values`.
-    uq.numel(): long
-        The number of the quantization integers, namely `res` is in [0, uq.numel()).
+    Returns:
+        -------
+        res: torch.Tensor, dtype: long The quantization result starts at 0. The shape is the same as that of `values`.
+        uq.numel(): long The number of the quantization integers, namely `res` is in [0, uq.numel()).
     """
     # quantize and re-assign bucket id
     res = torch.empty_like(values)
     uq = values.unique()
     cnt = 0
-    for (tid, v) in enumerate(uq):
-        mask = (values == v)
+    for tid, v in enumerate(uq):
+        mask = values == v
         cnt += torch.count_nonzero(mask)
         res[mask] = tid
     assert cnt == values.numel()
@@ -114,16 +105,16 @@ def quantize_values(values):
 
 
 class METHOD:
-    """define iRPE method IDs
-    We divide the implementation of CROSS into CROSS_ROWS and CROSS_COLS.
-
+    """define iRPE method IDs We divide the implementation of CROSS into CROSS_ROWS and CROSS_COLS.
     """
+
     EUCLIDEAN = 0
     QUANT = 1
     PRODUCT = 3
     CROSS = 4
     CROSS_ROWS = 41
     CROSS_COLS = 42
+
 
 '''
 @torch.no_grad()
@@ -150,6 +141,7 @@ def _rp_2d_euclidean(diff, **kwargs):
     return piecewise_index(dis, **kwargs)
 '''
 
+
 @torch.no_grad()
 def _rp_2d_euclidean(diff, **kwargs):
     """2D RPE with Euclidean method.
@@ -161,16 +153,13 @@ def _rp_2d_euclidean(diff, **kwargs):
         where L is the sequence length,
         and 2 represents a 2D offset (row_offset, col_offset).
 
-    Returns
-    -------
-    index: torch.Tensor, dtype: long
-        index to corresponding encodings.
-        The shape of `index` is (L, L),
-        where L is the sequence length.
+    Returns:
+        -------
+        index: torch.Tensor, dtype: long index to corresponding encodings. The shape of `index` is (L, L), where L is
+            the sequence length.
     """
     dis = diff.square().sum(2).float().sqrt().round()
     return piecewise_index(dis, **kwargs)
-
 
 
 @torch.no_grad()
@@ -184,14 +173,11 @@ def _rp_2d_quant(diff, **kwargs):
         where L is the sequence length,
         and 2 represents a 2D offset (row_offset, col_offset).
 
-    Returns
-    -------
-    index: torch.Tensor, dtype: long
-        index to corresponding encodings.
-        The shape of `index` is (L, L),
-        where L is the sequence length.
+    Returns:
+        -------
+        index: torch.Tensor, dtype: long index to corresponding encodings. The shape of `index` is (L, L), where L is
+            the sequence length.
     """
-
     dis = diff.square().sum(2)
     return piecewise_index(dis, **kwargs)
 
@@ -207,21 +193,17 @@ def _rp_2d_product(diff, **kwargs):
         where L is the sequence length,
         and 2 represents a 2D offset (row_offset, col_offset).
 
-    Returns
-    -------
-    index: torch.Tensor, dtype: long
-        index to corresponding encodings.
-        The shape of `index` is (L, L),
-        where L is the sequence length.
+    Returns:
+        -------
+        index: torch.Tensor, dtype: long index to corresponding encodings. The shape of `index` is (L, L), where L is
+            the sequence length.
     """
     # convert beta to an integer since beta is a float number.
-    beta_int = int(kwargs['beta'])
+    beta_int = int(kwargs["beta"])
     S = 2 * beta_int + 1
     # the output of piecewise index function is in [-beta_int, beta_int]
-    r = piecewise_index(diff[:, :, 0], **kwargs) + \
-        beta_int  # [0, 2 * beta_int]
-    c = piecewise_index(diff[:, :, 1], **kwargs) + \
-        beta_int  # [0, 2 * beta_int]
+    r = piecewise_index(diff[:, :, 0], **kwargs) + beta_int  # [0, 2 * beta_int]
+    c = piecewise_index(diff[:, :, 1], **kwargs) + beta_int  # [0, 2 * beta_int]
     pid = r * S + c
     return pid
 
@@ -237,12 +219,10 @@ def _rp_2d_cross_rows(diff, **kwargs):
         where L is the sequence length,
         and 2 represents a 2D offset (row_offset, col_offset).
 
-    Returns
-    -------
-    index: torch.Tensor, dtype: long
-        index to corresponding encodings.
-        The shape of `index` is (L, L),
-        where L is the sequence length.
+    Returns:
+        -------
+        index: torch.Tensor, dtype: long index to corresponding encodings. The shape of `index` is (L, L), where L is
+            the sequence length.
     """
     dis = diff[:, :, 0]
     return piecewise_index(dis, **kwargs)
@@ -259,14 +239,11 @@ def _rp_2d_cross_cols(diff, **kwargs):
         where L is the sequence length,
         and 2 represents a 2D offset (row_offset, col_offset).
 
-    Returns
-    -------
-    index: torch.Tensor, dtype: long
-        index to corresponding encodings.
-        The shape of `index` is (L, L),
-        where L is the sequence length.
+    Returns:
+        -------
+        index: torch.Tensor, dtype: long index to corresponding encodings. The shape of `index` is (L, L), where L is
+            the sequence length.
     """
-
     dis = diff[:, :, 1]
     return piecewise_index(dis, **kwargs)
 
@@ -282,8 +259,7 @@ _METHOD_FUNC = {
 
 
 def get_num_buckets(method, alpha, beta, gamma):
-    """ Get number of buckets storing relative position encoding.
-    The buckets does not contain `skip` token.
+    """Get number of buckets storing relative position encoding. The buckets does not contain `skip` token.
 
     Parameters
     ----------
@@ -292,10 +268,9 @@ def get_num_buckets(method, alpha, beta, gamma):
     alpha, beta, gamma: float
         The coefficients of piecewise index function.
 
-    Returns
-    -------
-    num_buckets: int
-        The number of buckets storing relative position encoding.
+    Returns:
+        -------
+        num_buckets: int The number of buckets storing relative position encoding.
     """
     beta_int = int(beta)
     if method == METHOD.PRODUCT:
@@ -312,10 +287,10 @@ BUCKET_IDS_BUF = dict()
 
 
 @torch.no_grad()
-def get_bucket_ids_2d_without_skip(method, height, width,
-                                   alpha, beta, gamma,
-                                   dtype=torch.long, device=torch.device('cpu')):
-    """Get bucket IDs for image relative position encodings without skip token
+def get_bucket_ids_2d_without_skip(
+    method, height, width, alpha, beta, gamma, dtype=torch.long, device=torch.device("cpu")
+):
+    """Get bucket IDs for image relative position encodings without skip token.
 
     Parameters
     ----------
@@ -331,18 +306,13 @@ def get_bucket_ids_2d_without_skip(method, height, width,
     device: torch.device
         the device of returned `bucket_ids`
 
-    Returns
-    -------
-    bucket_ids: torch.Tensor, dtype: long
-        The bucket IDs which index to corresponding encodings.
-        The shape of `bucket_ids` is (skip + L, skip + L),
-        where `L = height * wdith`.
-    num_buckets: int
-        The number of buckets including `skip` token.
-    L: int
-        The sequence length
+    Returns:
+        -------
+        bucket_ids: torch.Tensor, dtype: long The bucket IDs which index to corresponding encodings. The shape of
+            `bucket_ids` is (skip + L, skip + L), where `L = height * width`.
+        num_buckets: int The number of buckets including `skip` token.
+        L: int The sequence length
     """
-
     key = (method, alpha, beta, gamma, dtype, device)
     value = BUCKET_IDS_BUF.get(key, None)
     if value is None or value[-2] < height or value[-1] < width:
@@ -354,8 +324,7 @@ def get_bucket_ids_2d_without_skip(method, height, width,
         # relative position encoding mapping function
         func = _METHOD_FUNC.get(method, None)
         if func is None:
-            raise NotImplementedError(
-                f"[Error] The method ID {method} does not exist.")
+            raise NotImplementedError(f"[Error] The method ID {method} does not exist.")
         pos = get_absolute_positions(max_height, max_width, dtype, device)
 
         # compute the offset of a pair of 2D relative positions
@@ -366,13 +335,11 @@ def get_bucket_ids_2d_without_skip(method, height, width,
         diff = pos1 - pos2
 
         # bucket_ids: shape of (L, L)
-        bucket_ids = func(diff, alpha=alpha, beta=beta,
-                          gamma=gamma, dtype=dtype)
+        bucket_ids = func(diff, alpha=alpha, beta=beta, gamma=gamma, dtype=dtype)
         beta_int = int(beta)
         if method != METHOD.PRODUCT:
             bucket_ids += beta_int
-        bucket_ids = bucket_ids.view(
-            max_height, max_width, max_height, max_width)
+        bucket_ids = bucket_ids.view(max_height, max_width, max_height, max_width)
 
         num_buckets = get_num_buckets(method, alpha, beta, gamma)
         value = (bucket_ids, num_buckets, height, width)
@@ -385,10 +352,8 @@ def get_bucket_ids_2d_without_skip(method, height, width,
 
 
 @torch.no_grad()
-def get_bucket_ids_2d(method, height, width,
-                      skip, alpha, beta, gamma,
-                      dtype=torch.long, device=torch.device('cpu')):
-    """Get bucket IDs for image relative position encodings
+def get_bucket_ids_2d(method, height, width, skip, alpha, beta, gamma, dtype=torch.long, device=torch.device("cpu")):
+    """Get bucket IDs for image relative position encodings.
 
     Parameters
     ----------
@@ -409,18 +374,15 @@ def get_bucket_ids_2d(method, height, width,
     device: torch.device
         the device of returned `bucket_ids`
 
-    Returns
-    -------
-    bucket_ids: torch.Tensor, dtype: long
-        The bucket IDs which index to corresponding encodings.
-        The shape of `bucket_ids` is (skip + L, skip + L),
-        where `L = height * wdith`.
-    num_buckets: int
-        The number of buckets including `skip` token.
+    Returns:
+        -------
+        bucket_ids: torch.Tensor, dtype: long The bucket IDs which index to corresponding encodings. The shape of
+            `bucket_ids` is (skip + L, skip + L), where `L = height * width`.
+        num_buckets: int The number of buckets including `skip` token.
     """
-    bucket_ids, num_buckets, L = get_bucket_ids_2d_without_skip(method, height, width,
-                                                                alpha, beta, gamma,
-                                                                dtype, device)
+    bucket_ids, num_buckets, L = get_bucket_ids_2d_without_skip(
+        method, height, width, alpha, beta, gamma, dtype, device
+    )
 
     # add an extra encoding (id = num_buckets) for the classification token
     if skip > 0:
@@ -462,34 +424,45 @@ class iRPE(nn.Module):
         The number of buckets, which store encodings.
     initializer: None or an inplace function
         [Optional] The initializer to `lookup_table`.
-        Initalize `lookup_table` as zero by default.
+        Initialize `lookup_table` as zero by default.
     rpe_config: RPEConfig
         The config generated by the function `get_single_rpe_config`.
     """
+
     # a buffer to store bucket index
     # (key, rp_bucket, _ctx_rp_bucket_flatten)
     _rp_bucket_buf = (None, None, None)
 
-    def __init__(self, head_dim, num_heads=8,
-                 mode=None, method=None,
-                 transposed=True, num_buckets=None,
-                 initializer=None, rpe_config=None):
+    def __init__(
+        self,
+        head_dim,
+        num_heads=8,
+        mode=None,
+        method=None,
+        transposed=True,
+        num_buckets=None,
+        initializer=None,
+        rpe_config=None,
+    ):
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = head_dim
 
         # relative position
-        assert mode in [None, 'bias', 'contextual']
+        assert mode in [None, "bias", "contextual"]
         self.mode = mode
 
-        assert method is not None, 'method should be a METHOD ID rather than None'
+        assert method is not None, "method should be a METHOD ID rather than None"
         self.method = method
 
         self.transposed = transposed
         self.num_buckets = num_buckets
 
         if initializer is None:
-            def initializer(x): return None
+
+            def initializer(x):
+                return None
+
         self.initializer = initializer
 
         self.reset_parameters()
@@ -500,26 +473,21 @@ class iRPE(nn.Module):
     def reset_parameters(self):
         # initialize the parameters of iRPE
         if self.transposed:
-            if self.mode == 'bias':
-                self.lookup_table_bias = nn.Parameter(
-                    torch.zeros(self.num_heads, self.num_buckets))
+            if self.mode == "bias":
+                self.lookup_table_bias = nn.Parameter(torch.zeros(self.num_heads, self.num_buckets))
                 self.initializer(self.lookup_table_bias)
-            elif self.mode == 'contextual':
-                self.lookup_table_weight = nn.Parameter(
-                    torch.zeros(self.num_heads,self.head_dim, self.num_buckets))
+            elif self.mode == "contextual":
+                self.lookup_table_weight = nn.Parameter(torch.zeros(self.num_heads, self.head_dim, self.num_buckets))
                 self.initializer(self.lookup_table_weight)
         else:
-            if self.mode == 'bias':
-                raise NotImplementedError(
-                    "[Error] Bias non-transposed RPE does not exist.")
-            elif self.mode == 'contextual':
-                self.lookup_table_weight = nn.Parameter(
-                    torch.zeros(self.num_heads,
-                                self.num_buckets, self.head_dim))
+            if self.mode == "bias":
+                raise NotImplementedError("[Error] Bias non-transposed RPE does not exist.")
+            elif self.mode == "contextual":
+                self.lookup_table_weight = nn.Parameter(torch.zeros(self.num_heads, self.num_buckets, self.head_dim))
                 self.initializer(self.lookup_table_weight)
 
     def forward(self, x, height=None, width=None):
-        """forward function for iRPE.
+        """Forward function for iRPE.
 
         Parameters
         ----------
@@ -531,20 +499,17 @@ class iRPE(nn.Module):
                     equal to height * width (+1 if class token exists)
                   head_dim is the dimension of each head
 
-        Returns
-        -------
-        rpe_encoding: torch.Tensor
-            image Relative Position Encoding,
-            whose shape is (B, H, L, L)
+        Returns:
+            -------
+            rpe_encoding: torch.Tensor image Relative Position Encoding, whose shape is (B, H, L, L)
         """
-        rp_bucket, self._ctx_rp_bucket_flatten = \
-            self._get_rp_bucket(x, height=height, width=width)
+        rp_bucket, self._ctx_rp_bucket_flatten = self._get_rp_bucket(x, height=height, width=width)
         if self.transposed:
             return self.forward_rpe_transpose(x, rp_bucket)
         return self.forward_rpe_no_transpose(x, rp_bucket)
 
     def _get_rp_bucket(self, x, height=None, width=None):
-        """Get relative position encoding buckets IDs corresponding the input shape
+        """Get relative position encoding buckets IDs corresponding the input shape.
 
         Parameters
         ----------
@@ -562,53 +527,56 @@ class iRPE(nn.Module):
             [Optional] The width of the input
             If not defined, width = floor(sqrt(L))
 
-        Returns
-        -------
-        rp_bucket: torch.Tensor
-            relative position encoding buckets IDs
-            The shape is (L, L)
-        _ctx_rp_bucket_flatten: torch.Tensor or None
-            It is a private tensor for efficient computation.
+        Returns:
+            -------
+            rp_bucket: torch.Tensor relative position encoding buckets IDs The shape is (L, L)
+            _ctx_rp_bucket_flatten: torch.Tensor or None It is a private tensor for efficient computation.
         """
-        B, H, L, D = x.shape
+        _B, _H, L, _D = x.shape
         device = x.device
         if height is None:
             E = int(math.sqrt(L))
             height = width = E
         key = (height, width, device)
-        # use buffer if the spatial shape and device is not changable.
+        # use buffer if the spatial shape and device is not changeable.
 
         if self._rp_bucket_buf[0] == key:
             return self._rp_bucket_buf[1:3]
 
         skip = L - height * width
         config = self.rpe_config
-        if RPEIndexFunction is not None and self.mode == 'contextual' and self.transposed:
+        if RPEIndexFunction is not None and self.mode == "contextual" and self.transposed:
             # RPEIndexFunction uses int32 index.
             dtype = torch.int32
         else:
             dtype = torch.long
-        rp_bucket, num_buckets = get_bucket_ids_2d(method=self.method,
-                                                   height=height, width=width,
-                                                   skip=skip, alpha=config.alpha,
-                                                   beta=config.beta, gamma=config.gamma,
-                                                   dtype=dtype, device=device)
-        #from IPython import embed; embed()
+        rp_bucket, num_buckets = get_bucket_ids_2d(
+            method=self.method,
+            height=height,
+            width=width,
+            skip=skip,
+            alpha=config.alpha,
+            beta=config.beta,
+            gamma=config.gamma,
+            dtype=dtype,
+            device=device,
+        )
+        # from IPython import embed; embed()
         assert num_buckets == self.num_buckets
 
         # transposed contextual
         _ctx_rp_bucket_flatten = None
-        if self.mode == 'contextual' and self.transposed:
+        if self.mode == "contextual" and self.transposed:
             if RPEIndexFunction is None:
-                offset = torch.arange(0, L * self.num_buckets, self.num_buckets,
-                                      dtype=rp_bucket.dtype, device=rp_bucket.device).view(-1, 1)
+                offset = torch.arange(
+                    0, L * self.num_buckets, self.num_buckets, dtype=rp_bucket.dtype, device=rp_bucket.device
+                ).view(-1, 1)
                 _ctx_rp_bucket_flatten = (rp_bucket + offset).flatten()
         self._rp_bucket_buf = (key, rp_bucket, _ctx_rp_bucket_flatten)
         return rp_bucket, _ctx_rp_bucket_flatten
 
     def forward_rpe_transpose(self, x, rp_bucket):
-        """Forward function for iRPE (transposed version)
-        This version is utilized by RPE on Query or Key
+        """Forward function for iRPE (transposed version) This version is utilized by RPE on Query or Key.
 
         Parameters
         ----------
@@ -633,21 +601,17 @@ class iRPE(nn.Module):
         lookup_table_weight: torch.Tensor
             The shape is (H or 1, head_dim, num_buckets)
 
-        Returns
-        -------
-        output: torch.Tensor
-            Relative position encoding on queries or keys.
-            The shape is (B or 1, H, L, L),
-            where D is the output dimension for each head.
+        Returns:
+            -------
+            output: torch.Tensor Relative position encoding on queries or keys. The shape is (B or 1, H, L, L), where D
+                is the output dimension for each head.
         """
-
         B = len(x)  # batch_size
         L_query, L_key = rp_bucket.shape
-        if self.mode == 'bias':
-            return self.lookup_table_bias[:, rp_bucket.flatten()].\
-                view(1, self.num_heads, L_query, L_key)
+        if self.mode == "bias":
+            return self.lookup_table_bias[:, rp_bucket.flatten()].view(1, self.num_heads, L_query, L_key)
 
-        elif self.mode == 'contextual':
+        elif self.mode == "contextual":
             """
             ret[b, h, i, j] = lookup_table_weight[b, h, i, rp_bucket[i, j]]
 
@@ -660,19 +624,18 @@ class iRPE(nn.Module):
             index: L_query + L_query * L_key + B * H * L_query * L_key
             total: O(B * H * L_query * (head_dim * num_buckets + L_key))
             """
-            lookup_table = torch.matmul(
-                x.transpose(0, 1).reshape(-1, B * L_query, self.head_dim),
-                self.lookup_table_weight).\
-                view(-1, B, L_query, self.num_buckets).transpose(0, 1)
+            lookup_table = (
+                torch.matmul(x.transpose(0, 1).reshape(-1, B * L_query, self.head_dim), self.lookup_table_weight)
+                .view(-1, B, L_query, self.num_buckets)
+                .transpose(0, 1)
+            )
             if RPEIndexFunction is not None:
                 return RPEIndexFunction.apply(lookup_table, rp_bucket)
             else:
-                return lookup_table.flatten(2)[:, :, self._ctx_rp_bucket_flatten].\
-                    view(B, -1, L_query, L_key)
+                return lookup_table.flatten(2)[:, :, self._ctx_rp_bucket_flatten].view(B, -1, L_query, L_key)
 
     def forward_rpe_no_transpose(self, x, rp_bucket):
-        """Forward function for iRPE (non-transposed version)
-        This version is utilized by RPE on Value.
+        """Forward function for iRPE (non-transposed version) This version is utilized by RPE on Value.
 
         Parameters
         ----------
@@ -692,29 +655,27 @@ class iRPE(nn.Module):
         lookup_table_weight: torch.Tensor
             The shape is (H or 1, num_buckets, head_dim)
 
-        Returns
-        -------
-        output: torch.Tensor
-            Relative position encoding on values.
-            The shape is (B, H, L, D),
-            where D is the output dimension for each head.
+        Returns:
+            -------
+            output: torch.Tensor Relative position encoding on values. The shape is (B, H, L, D), where D is the output
+                dimension for each head.
         """
-
-        B = len(x)  # batch_size
+        len(x)  # batch_size
         L_query, L_key = rp_bucket.shape
-        assert self.mode == 'contextual', "Only support contextual \
+        assert self.mode == "contextual", (
+            "Only support contextual \
 version in non-transposed version"
-        weight = self.lookup_table_weight[:, rp_bucket.flatten()].\
-            view(self.num_heads, L_query, L_key, self.head_dim)
+        )
+        weight = self.lookup_table_weight[:, rp_bucket.flatten()].view(self.num_heads, L_query, L_key, self.head_dim)
         # (H, L_query, B, L_key) @ (H, L_query, L_key, D) = (H, L_query, B, D)
         # -> (B, H, L_query, D)
         return torch.matmul(x.permute(1, 2, 0, 3), weight).permute(2, 0, 1, 3)
 
     def __repr__(self):
-        return 'iRPE(head_dim={rpe.head_dim}, num_heads={rpe.num_heads}, \
-mode="{rpe.mode}", method={rpe.method}, transposed={rpe.transposed}, \
-num_buckets={rpe.num_buckets}, initializer={rpe.initializer}, \
-rpe_config={rpe.rpe_config})'.format(rpe=self)
+        return f'iRPE(head_dim={self.head_dim}, num_heads={self.num_heads}, \
+mode="{self.mode}", method={self.method}, transposed={self.transposed}, \
+num_buckets={self.num_buckets}, initializer={self.initializer}, \
+rpe_config={self.rpe_config})'
 
 
 class iRPE_Cross(nn.Module):
@@ -740,7 +701,7 @@ class iRPE_Cross(nn.Module):
         The number of buckets, which store encodings.
     initializer: None or an inplace function
         [Optional] The initializer to `lookup_table`.
-        Initalize `lookup_table` as zero by default.
+        Initialize `lookup_table` as zero by default.
     rpe_config: RPEConfig
         The config generated by the function `get_single_rpe_config`.
     """
@@ -752,9 +713,8 @@ class iRPE_Cross(nn.Module):
         self.rp_cols = iRPE(**kwargs, method=METHOD.CROSS_COLS)
 
     def forward(self, x, height=None, width=None):
-        """forward function for iRPE.
-        Compute encoding on horizontal and vertical directions separately,
-        then summarize them.
+        """Forward function for iRPE. Compute encoding on horizontal and vertical directions separately, then summarize
+        them.
 
         Parameters
         ----------
@@ -772,31 +732,24 @@ class iRPE_Cross(nn.Module):
             [Optional] The width of the input
             If not defined, width = floor(sqrt(L))
 
-        Returns
-        -------
-        rpe_encoding: torch.Tensor
-            Image Relative Position Encoding,
-            whose shape is (B, H, L, L)
+        Returns:
+            -------
+            rpe_encoding: torch.Tensor Image Relative Position Encoding, whose shape is (B, H, L, L)
         """
-
         rows = self.rp_rows(x, height=height, width=width)
         cols = self.rp_cols(x, height=height, width=width)
         return rows + cols
 
     def __repr__(self):
-        return 'iRPE_Cross(head_dim={rpe.head_dim}, \
-num_heads={rpe.num_heads}, mode="{rpe.mode}", method={rpe.method}, \
-transposed={rpe.transposed}, num_buckets={rpe.num_buckets}, \
-initializer={rpe.initializer}, \
-rpe_config={rpe.rpe_config})'.format(rpe=self.rp_rows)
+        return f'iRPE_Cross(head_dim={self.rp_rows.head_dim}, \
+num_heads={self.rp_rows.num_heads}, mode="{self.rp_rows.mode}", method={self.rp_rows.method}, \
+transposed={self.rp_rows.transposed}, num_buckets={self.rp_rows.num_buckets}, \
+initializer={self.rp_rows.initializer}, \
+rpe_config={self.rp_rows.rpe_config})'
 
 
-def get_single_rpe_config(ratio=1.9,
-                          method=METHOD.PRODUCT,
-                          mode='contextual',
-                          shared_head=True,
-                          skip=0):
-    """Get the config of single relative position encoding
+def get_single_rpe_config(ratio=1.9, method=METHOD.PRODUCT, mode="contextual", shared_head=True, skip=0):
+    """Get the config of single relative position encoding.
 
     Parameters
     ----------
@@ -816,10 +769,9 @@ def get_single_rpe_config(ratio=1.9,
         When skip is 1, there is a classification token before spatial tokens.
         When skip > 1, there are `skip` extra tokens before spatial tokens.
 
-    Returns
-    -------
-    config: RPEConfig
-        The config of single relative position encoding.
+    Returns:
+        -------
+        config: RPEConfig The config of single relative position encoding.
     """
     config = edict()
     # whether to share encodings across different heads
@@ -830,29 +782,21 @@ def get_single_rpe_config(ratio=1.9,
     config.method = method
     # the coefficients of piecewise index function
     config.alpha = 1 * ratio
-    #config.alpha = 1
+    # config.alpha = 1
     config.beta = 2 * ratio
-    #config.gamma = 8 * ratio
+    # config.gamma = 8 * ratio
     config.gamma = 8 * ratio
 
     # set the number of buckets
-    config.num_buckets = get_num_buckets(method,
-                                         config.alpha,
-                                         config.beta,
-                                         config.gamma)
+    config.num_buckets = get_num_buckets(method, config.alpha, config.beta, config.gamma)
     # add extra bucket for `skip` token (e.g. class token)
     if skip > 0:
         config.num_buckets += 1
     return config
 
 
-def get_rpe_config(ratio=1.9,
-                   method=METHOD.PRODUCT,
-                   mode='contextual',
-                   shared_head=True,
-                   skip=0,
-                   rpe_on='k'):
-    """Get the config of relative position encoding on queries, keys and values
+def get_rpe_config(ratio=1.9, method=METHOD.PRODUCT, mode="contextual", shared_head=True, skip=0, rpe_on="k"):
+    """Get the config of relative position encoding on queries, keys and values.
 
     Parameters
     ----------
@@ -879,14 +823,13 @@ def get_rpe_config(ratio=1.9,
         "qk": RPE on queries and keys
         "qkv": RPE on queries, keys and values
 
-    Returns
-    -------
-    config: RPEConfigs
+    Returns:
+        -------
+        config: RPEConfigs
         config.rpe_q: the config of relative position encoding on queries
         config.rpe_k: the config of relative position encoding on keys
         config.rpe_v: the config of relative position encoding on values
     """
-
     # alias
     if isinstance(method, str):
         method_mapping = dict(
@@ -896,8 +839,8 @@ def get_rpe_config(ratio=1.9,
             product=METHOD.PRODUCT,
         )
         method = method_mapping[method.lower()]
-    if mode == 'ctx':
-        mode = 'contextual'
+    if mode == "ctx":
+        mode = "contextual"
     config = edict()
     # relative position encoding on queries, keys and values
     kwargs = dict(
@@ -907,9 +850,9 @@ def get_rpe_config(ratio=1.9,
         shared_head=shared_head,
         skip=skip,
     )
-    config.rpe_q = get_single_rpe_config(**kwargs) if 'q' in rpe_on else None
-    config.rpe_k = get_single_rpe_config(**kwargs) if 'k' in rpe_on else None
-    config.rpe_v = get_single_rpe_config(**kwargs) if 'v' in rpe_on else None
+    config.rpe_q = get_single_rpe_config(**kwargs) if "q" in rpe_on else None
+    config.rpe_k = get_single_rpe_config(**kwargs) if "k" in rpe_on else None
+    config.rpe_v = get_single_rpe_config(**kwargs) if "v" in rpe_on else None
     return config
 
 
@@ -928,11 +871,9 @@ def build_rpe(config, head_dim, num_heads):
     num_heads: int
         The number of parallel attention heads.
 
-    Returns
-    -------
-    modules: a list of nn.Module
-        The iRPE Modules on [queries, keys, values].
-        None when RPE is not used.
+    Returns:
+        -------
+        modules: a list of nn.Module The iRPE Modules on [queries, keys, values]. None when RPE is not used.
     """
     if config is None:
         return None, None, None
@@ -953,11 +894,11 @@ def build_rpe(config, head_dim, num_heads):
             num_buckets=rpe.num_buckets,
             rpe_config=rpe,
         )
-    return [_build_single_rpe(rpe, transposed)
-            for rpe, transposed in zip(rpes, transposeds)]
+
+    return [_build_single_rpe(rpe, transposed) for rpe, transposed in zip(rpes, transposeds)]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     config = get_rpe_config(skip=1)
     rpe = build_rpe(config, head_dim=32, num_heads=4)
     print(rpe)
