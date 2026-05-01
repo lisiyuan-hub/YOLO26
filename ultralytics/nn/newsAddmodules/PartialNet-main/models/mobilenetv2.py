@@ -1,16 +1,16 @@
+from __future__ import annotations
+
 from functools import partial
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable
 
 import torch
-from torch import nn, Tensor
-
+from torch import Tensor, nn
+from torchvision.models._api import Weights, WeightsEnum, register_model
+from torchvision.models._meta import _IMAGENET_CATEGORIES
+from torchvision.models._utils import _make_divisible, _ovewrite_named_param, handle_legacy_interface
 from torchvision.ops.misc import Conv2dNormActivation
 from torchvision.transforms._presets import ImageClassification
 from torchvision.utils import _log_api_usage_once
-from torchvision.models._api import register_model, Weights, WeightsEnum
-from torchvision.models._meta import _IMAGENET_CATEGORIES
-from torchvision.models._utils import _make_divisible, _ovewrite_named_param, handle_legacy_interface
-
 
 __all__ = ["MobileNetV2", "MobileNet_V2_Weights", "mobilenet_v2"]
 
@@ -18,7 +18,7 @@ __all__ = ["MobileNetV2", "MobileNet_V2_Weights", "mobilenet_v2"]
 # necessary for backwards compatibility
 class InvertedResidual(nn.Module):
     def __init__(
-        self, inp: int, oup: int, stride: int, expand_ratio: int, norm_layer: Optional[Callable[..., nn.Module]] = None
+        self, inp: int, oup: int, stride: int, expand_ratio: int, norm_layer: Callable[..., nn.Module] | None = None
     ) -> None:
         super().__init__()
         self.stride = stride
@@ -28,10 +28,10 @@ class InvertedResidual(nn.Module):
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
 
-        hidden_dim = int(round(inp * expand_ratio))
+        hidden_dim = round(inp * expand_ratio)
         self.use_res_connect = self.stride == 1 and inp == oup
 
-        layers: List[nn.Module] = []
+        layers: list[nn.Module] = []
         if expand_ratio != 1:
             # pw
             layers.append(
@@ -69,25 +69,23 @@ class MobileNetV2(nn.Module):
         self,
         num_classes: int = 1000,
         width_mult: float = 1.0,
-        inverted_residual_setting: Optional[List[List[int]]] = None,
+        inverted_residual_setting: list[list[int]] | None = None,
         round_nearest: int = 8,
-        block: Optional[Callable[..., nn.Module]] = None,
-        norm_layer: Optional[Callable[..., nn.Module]] = None,
+        block: Callable[..., nn.Module] | None = None,
+        norm_layer: Callable[..., nn.Module] | None = None,
         dropout: float = 0.2,
     ) -> None:
-        """
-        MobileNet V2 main class
+        """MobileNet V2 main class.
 
         Args:
             num_classes (int): Number of classes
             width_mult (float): Width multiplier - adjusts number of channels in each layer by this amount
             inverted_residual_setting: Network structure
-            round_nearest (int): Round the number of channels in each layer to be a multiple of this number
-            Set to 1 to turn off rounding
+            round_nearest (int): Round the number of channels in each layer to be a multiple of this number Set to 1 to
+                turn off rounding
             block: Module specifying inverted residual building block for mobilenet
             norm_layer: Module specifying the normalization layer to use
             dropout (float): The droupout probability
-
         """
         super().__init__()
         _log_api_usage_once(self)
@@ -122,7 +120,7 @@ class MobileNetV2(nn.Module):
         # building first layer
         input_channel = _make_divisible(input_channel * width_mult, round_nearest)
         self.last_channel = _make_divisible(last_channel * max(1.0, width_mult), round_nearest)
-        features: List[nn.Module] = [
+        features: list[nn.Module] = [
             Conv2dNormActivation(3, input_channel, stride=2, norm_layer=norm_layer, activation_layer=nn.ReLU6)
         ]
         # building inverted residual blocks
@@ -225,26 +223,20 @@ class MobileNet_V2_Weights(WeightsEnum):
 
 @register_model()
 @handle_legacy_interface(weights=("pretrained", MobileNet_V2_Weights.IMAGENET1K_V1))
-def mobilenet_v2(
-    *, weights: Optional[MobileNet_V2_Weights] = None, progress: bool = True, **kwargs: Any
-) -> MobileNetV2:
-    """MobileNetV2 architecture from the `MobileNetV2: Inverted Residuals and Linear
-    Bottlenecks <https://arxiv.org/abs/1801.04381>`_ paper.
+def mobilenet_v2(*, weights: MobileNet_V2_Weights | None = None, progress: bool = True, **kwargs: Any) -> MobileNetV2:
+    """MobileNetV2 architecture from the `MobileNetV2: Inverted Residuals and Linear Bottlenecks
+    <https://arxiv.org/abs/1801.04381>`_ paper.
 
     Args:
-        weights (:class:`~torchvision.models.MobileNet_V2_Weights`, optional): The
-            pretrained weights to use. See
-            :class:`~torchvision.models.MobileNet_V2_Weights` below for
-            more details, and possible values. By default, no pre-trained
-            weights are used.
-        progress (bool, optional): If True, displays a progress bar of the
-            download to stderr. Default is True.
-        **kwargs: parameters passed to the ``torchvision.models.mobilenetv2.MobileNetV2``
-            base class. Please refer to the `source code
-            <https://github.com/pytorch/vision/blob/main/torchvision/models/mobilenetv2.py>`_
-            for more details about this class.
-
-    .. autoclass:: torchvision.models.MobileNet_V2_Weights
+        weights (: class:`~torchvision.models.MobileNet_V2_Weights`, optional): The pretrained weights to use. See
+            :class:`~torchvision.models.MobileNet_V2_Weights` below for more details, and possible values. By default,
+            no pre-trained weights are used.
+        progress (bool, optional): If True, displays a progress bar of the download to stderr. Default is True.
+        **kwargs: parameters passed to the ``torchvision.models.mobilenetv2.MobileNetV2`` base class. Please refer to
+            the `source code
+        <https: //github.com/pytorch/vision/blob/main/torchvision/models/mobilenetv2.py>`_ for more details about this
+            class.
+        .. autoclass:: torchvision.models.MobileNet_V2_Weights
         :members:
     """
     weights = MobileNet_V2_Weights.verify(weights)
