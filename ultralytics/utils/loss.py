@@ -339,10 +339,12 @@ class v8DetectionLoss:
         h = model.args  # hyperparameters
 
         m = model.model[-1]  # Detect() module
-        #对loss改进，没有注释掉的部分就是使用的模块
+        # 对loss改进，没有注释掉的部分就是使用的模块
         # self.bce = nn.BCEWithLogitsLoss(reduction="none")
-        self.bce = SlideLoss(nn.BCEWithLogitsLoss(reduction='none')) # SlideLoss   如果不注释使用的就是SlideLoss损失失函数
-        
+        self.bce = SlideLoss(
+            nn.BCEWithLogitsLoss(reduction="none")
+        )  # SlideLoss   如果不注释使用的就是SlideLoss损失失函数
+
         self.hyp = h
         self.stride = m.stride  # model strides
         self.nc = m.nc  # number of classes
@@ -1246,14 +1248,15 @@ class TVPSegmentLoss(TVPDetectLoss):
         cls_loss = vp_loss[0][2]
         return cls_loss, vp_loss[1]
 
-#增加
+
+# 增加
 class SlideLoss(nn.Module):
     def __init__(self, loss_fcn):
-        super(SlideLoss, self).__init__()
+        super().__init__()
         self.loss_fcn = loss_fcn
         self.reduction = loss_fcn.reduction
-        self.loss_fcn.reduction = 'none'  # required to apply SL to each element
- 
+        self.loss_fcn.reduction = "none"  # required to apply SL to each element
+
     def forward(self, pred, true, auto_iou=0.5):
         loss = self.loss_fcn(pred, true)
         if auto_iou < 0.2:
@@ -1266,9 +1269,9 @@ class SlideLoss(nn.Module):
         a3 = torch.exp(-(true - 1.0))
         modulating_weight = a1 * b1 + a2 * b2 + a3 * b3
         loss *= modulating_weight
-        if self.reduction == 'mean':
+        if self.reduction == "mean":
             return loss.mean()
-        elif self.reduction == 'sum':
+        elif self.reduction == "sum":
             return loss.sum()
         else:  # 'none'
             return loss
