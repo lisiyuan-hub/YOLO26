@@ -9,8 +9,7 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-from .newsAddmodules import *
-    
+
 from ultralytics.nn.autobackend import check_class_names
 from ultralytics.nn.modules import (
     AIFI,
@@ -99,6 +98,8 @@ from ultralytics.utils.torch_utils import (
     time_sync,
 )
 
+from .newsAddmodules import *
+
 
 class BaseModel(torch.nn.Module):
     """Base class for all YOLO models in the Ultralytics family.
@@ -171,25 +172,25 @@ class BaseModel(torch.nn.Module):
         Returns:
             (torch.Tensor): The last output of the model.
         """
-        #下面只是掉的代码是最原始的代码
+        # 下面只是掉的代码是最原始的代码
         y, dt, embeddings = [], [], []  # outputs
         embed = frozenset(embed) if embed is not None else {-1}
         max_idx = max(embed)
         for m in self.model:
-             if m.f != -1:  # if not from previous layer
-                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
-             if profile:
-                 self._profile_one_layer(m, x, dt)
-             x = m(x)  # run
-             y.append(x if m.i in self.save else None)  # save output
-             if visualize:
-                 feature_visualization(x, m.type, m.i, save_dir=visualize)
-             if m.i in embed:
-                 embeddings.append(torch.nn.functional.adaptive_avg_pool2d(x, (1, 1)).squeeze(-1).squeeze(-1))  # flatten
-                 if m.i == max_idx:
-                     return torch.unbind(torch.cat(embeddings, 1), dim=0)
+            if m.f != -1:  # if not from previous layer
+                x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
+            if profile:
+                self._profile_one_layer(m, x, dt)
+            x = m(x)  # run
+            y.append(x if m.i in self.save else None)  # save output
+            if visualize:
+                feature_visualization(x, m.type, m.i, save_dir=visualize)
+            if m.i in embed:
+                embeddings.append(torch.nn.functional.adaptive_avg_pool2d(x, (1, 1)).squeeze(-1).squeeze(-1))  # flatten
+                if m.i == max_idx:
+                    return torch.unbind(torch.cat(embeddings, 1), dim=0)
         return x
-        #VanillNet模块
+        # VanillNet模块
         # y, dt, embeddings = [], [], []  # outputs
         # for m in self.model:
         #    if m.f != -1:  # if not from previous layer
@@ -215,8 +216,7 @@ class BaseModel(torch.nn.Module):
         #        embeddings.append(nn.functional.adaptive_avg_pool2d(x, (1, 1)).squeeze(-1).squeeze(-1))  # flatten
         #        if m.i == max(embed):
         #            return torch.unbind(torch.cat(embeddings, 1), dim=0)
-        #return x
-
+        # return x
 
     def _predict_augment(self, x):
         """Perform augmentations on input image x and return augmented inference."""
@@ -282,7 +282,7 @@ class BaseModel(torch.nn.Module):
                     m.fuse()  # remove one2many head
                 if isinstance(m, UniRepLKNetBlock):
                     m.reparameterize()
-                    LOGGER.info("Switch model to UniRepLKNetBlock") #增加MAFPN的修改
+                    LOGGER.info("Switch model to UniRepLKNetBlock")  # 增加MAFPN的修改
 
             self.info(verbose=verbose)
 
@@ -321,9 +321,15 @@ class BaseModel(torch.nn.Module):
         """
         self = super()._apply(fn)
         m = self.model[-1]  # Detect()
-        #检测头改进
+        # 检测头改进
         if isinstance(
-            m, (Detect, CLLAHead, Detect26_StripConvHead, Detect26_ASFFHead,)
+            m,
+            (
+                Detect,
+                CLLAHead,
+                Detect26_StripConvHead,
+                Detect26_ASFFHead,
+            ),
         ):  # includes all Detect subclasses like Segment, Pose, OBB, WorldDetect, YOLOEDetect, YOLOESegment
             m.stride = fn(m.stride)
             m.anchors = fn(m.anchors)
@@ -431,7 +437,9 @@ class DetectionModel(BaseModel):
 
         # Build strides
         m = self.model[-1]  # Detect()
-        if isinstance(m, (Detect, CLLAHead, Detect26_StripConvHead, Detect26_ASFFHead)):  # includes all Detect subclasses like Segment, Pose, OBB, YOLOEDetect, YOLOESegment
+        if isinstance(
+            m, (Detect, CLLAHead, Detect26_StripConvHead, Detect26_ASFFHead)
+        ):  # includes all Detect subclasses like Segment, Pose, OBB, YOLOEDetect, YOLOESegment
             s = 256  # 2x min stride
             m.inplace = self.inplace
 
@@ -1583,11 +1591,12 @@ def parse_model(d, ch, verbose=True):
         (torch.nn.Sequential): PyTorch model.
         (list): Sorted list of layer indices whose outputs need to be saved.
     """
-#引入的改进模块
-    C3k2_class = (C3k2,
-                  C3k2_EVA,
-                  PATConvC3k2,
-                  )
+    # 引入的改进模块
+    C3k2_class = (
+        C3k2,
+        C3k2_EVA,
+        PATConvC3k2,
+    )
 
     import ast
 
@@ -1649,17 +1658,17 @@ def parse_model(d, ch, verbose=True):
             SCDown,
             C2fCIB,
             A2C2f,
-            #新增的模块不一定要加载这个base中，因为base会在下面使用
+            # 新增的模块不一定要加载这个base中，因为base会在下面使用
             PATConvC3k2,
             CSPStage,
             C2f_RFAConv,
             C2f_DLKA,
             CSPStage,
-            C2f_SENetV2, 
+            C2f_SENetV2,
             GELAN,
             C2f_GhostConv,
             RepVGGBlock,
-            FocalModulation, #对SPPF的修改
+            FocalModulation,  # 对SPPF的修改
             SCDown,
             ADown,
             AIFI,
@@ -1680,7 +1689,7 @@ def parse_model(d, ch, verbose=True):
             C2PSA_CFAM,
             SPASPP,
             C3k2_DBlock,
-            C3k2_EBlock ,
+            C3k2_EBlock,
             C3k2_FreMLP,
         }
     )
@@ -1705,7 +1714,7 @@ def parse_model(d, ch, verbose=True):
             C2f_RFAConv,
             C2f_DLKA,
             CSPStage,
-            C2f_SENetV2, 
+            C2f_SENetV2,
             GELAN,
             C2f_GhostConv,
             RepVGGBlock,
@@ -1721,10 +1730,8 @@ def parse_model(d, ch, verbose=True):
             SPASPP,
         }
     )
-    #增添，主干网络
+    # 增添，主干网络
     # backbone = False
-
-
 
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
         # t = m #增添
@@ -1762,14 +1769,14 @@ def parse_model(d, ch, verbose=True):
                     args.extend((True, 1.2))
             if m is C2fCIB:
                 legacy = False
-        elif m in {AIFI, SELayerV2}:#这里是增添
+        elif m in {AIFI, SELayerV2}:  # 这里是增添
             args = [ch[f], *args]
-        #BeakBone
+        # BeakBone
         # elif m in (vanillanet_5, vanillanet_6, vanillanet_7, vanillanet_8, vanillanet_9, vanillanet_10, vanillanet_11, vanillanet_12, vanillanet_13, vanillanet_13_x1_5, vanillanet_13_x1_5_ada_pool):
         #     m = m(*args)
         #     c2 = m.channel
         #     backbone = False
-        #上述的backbone为true是使用现在定义的主干网络
+        # 上述的backbone为true是使用现在定义的主干网络
 
         elif m in frozenset({HGStem, HGBlock}):
             c1, cm, c2 = ch[f], args[0], args[1]
@@ -1781,11 +1788,11 @@ def parse_model(d, ch, verbose=True):
             c2 = args[1] if args[3] else args[1] * 4
         elif m is torch.nn.BatchNorm2d:
             args = [ch[f]]
-        #这里是修改，增添的模块这这里被定义
-        elif m in (LFSB,BGBFusion,CAFM, DSEB):
+        # 这里是修改，增添的模块这这里被定义
+        elif m in (LFSB, BGBFusion, CAFM, DSEB):
             c2 = ch[f[1]]
             args = [c2, *args]
-        #增添模块
+        # 增添模块
         elif m in (PATConvC3k2, DYsample, EUCB, CPCA, EBlock, DBlock, FreUnitMLP):
             c2 = ch[f]
             args = [c2, *args]
@@ -1813,7 +1820,21 @@ def parse_model(d, ch, verbose=True):
             args.extend([reg_max, end2end, [ch[x] for x in f]])
             if m is Segment or m is YOLOESegment or m is Segment26 or m is YOLOESegment26:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
-            if m in {Detect, YOLOEDetect, Segment, Segment26, YOLOESegment, YOLOESegment26, Pose, Pose26, OBB, OBB26, CLLAHead, Detect26_StripConvHead, Detect26_ASFFHead}:
+            if m in {
+                Detect,
+                YOLOEDetect,
+                Segment,
+                Segment26,
+                YOLOESegment,
+                YOLOESegment26,
+                Pose,
+                Pose26,
+                OBB,
+                OBB26,
+                CLLAHead,
+                Detect26_StripConvHead,
+                Detect26_ASFFHead,
+            }:
                 m.legacy = legacy
         elif m is v10Detect:
             args.append([ch[x] for x in f])
@@ -1827,7 +1848,7 @@ def parse_model(d, ch, verbose=True):
             args = [c1, c2, *args[1:]]
         elif m is CBFuse:
             c2 = ch[f[-1]]
-         #这里是引进EVA模块的修改代码
+        # 这里是引进EVA模块的修改代码
         elif m is EVA:
             c2 = ch[f]
             args = [c2, *args]
@@ -1839,18 +1860,18 @@ def parse_model(d, ch, verbose=True):
             c2 = ch[f]
         else:
             c2 = ch[f]
-#如果需要更改主干，就需要注释掉下面这段代码
+        # 如果需要更改主干，就需要注释掉下面这段代码
 
         m_ = torch.nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
         t = str(m)[8:-2].replace("__main__.", "")  # module type
         m_.np = sum(x.numel() for x in m_.parameters())  # number params
         m_.i, m_.f, m_.type = i, f, t  # attach index, 'from' index, type
         if verbose:
-           LOGGER.info(f"{i:>3}{f!s:>20}{n_:>3}{m_.np:10.0f}  {t:<45}{args!s:<30}")  # print
+            LOGGER.info(f"{i:>3}{f!s:>20}{n_:>3}{m_.np:10.0f}  {t:<45}{args!s:<30}")  # print
         save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)  # append to savelist
         layers.append(m_)
         if i == 0:
-           ch = []
+            ch = []
         ch.append(c2)
 
         # if isinstance(c2, list):
@@ -1940,9 +1961,8 @@ def guess_model_task(model):
             return "pose"
         if "obb" in m:
             return "obb"
-        else :
+        else:
             return "detect"
-        
 
     # Guess from model cfg
     if isinstance(model, dict):
@@ -1965,7 +1985,9 @@ def guess_model_task(model):
                 return "pose"
             elif isinstance(m, OBB):
                 return "obb"
-            elif isinstance(m, (Detect, WorldDetect, YOLOEDetect, v10Detect, CLLAHead, Detect26_StripConvHead, Detect26_ASFFHead)):
+            elif isinstance(
+                m, (Detect, WorldDetect, YOLOEDetect, v10Detect, CLLAHead, Detect26_StripConvHead, Detect26_ASFFHead)
+            ):
                 return "detect"
 
     # Guess from model filename
