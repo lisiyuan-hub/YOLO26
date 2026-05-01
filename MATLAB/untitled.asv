@@ -1,0 +1,93 @@
+%% 复杂医疗图像离线预处理与多尺度特征蒸馏脚本 (YOLO-GCE 高级版)
+% 核心技术: CLAHE, 弹性形变, 各向异性扩散, 多尺度 Gabor 纹理融合
+clear; clc; close all;
+
+% ==================== 1. 全局超参数配置 ====================
+cfg.inputDir = 'E:\Datasets\BCCD\images\train\';       % 原始输入路径
+cfg.outputDir = 'E:\Datasets\BCCD_Complex_Aug\images\train\'; % 增强输出路径
+cfg.enableParallel = true;   % 开启并行池加速
+cfg.gaborWavelength = [3, 6]; % Gabor 滤波器波长 (尺度)
+cfg.gaborOrientations = 0:45:135; % Gabor 滤波器方向
+
+if ~exist(cfg.outputDir, 'dir'), mkdir(cfg.outputDir); end
+
+% 初始化并行计算池
+if cfg.enableParallel && isempty(gcp('nocreate'))
+    parpool('local');
+end
+
+% 加载图像列表
+imds = imageDatastore(cfg.inputDir);
+fileList = imds.Files;
+numFiles = numel(fileList);
+fprintf('初始化完成，检测到 %d 张医疗图像，准备启动处理管线...\n', numFiles);
+
+% 创建多尺度 Gabor 滤波器组 (用于结构蒸馏)
+gaborBank = gabor(cfg.gaborWavelength, cfg.gaborOrientations);
+
+% ==================== 2. 并行处理管线 ====================
+parfor i = 1:numFiles
+    % 读取图像信息
+    filePath = fileList{i};
+    [~, name, ext] = fileparts(filePath);
+    originalImg = imread(filePath);
+    
+    % 若为灰度图(如部分MRI)则转RGB以统一通道处理逻辑
+    if size(originalImg, 3) == 1
+        originalImg = cat(3, originalImg, originalImg, originalImg);
+    end
+    
+    % ------------- [模块A: 自适应对比度增强 (CLAHE)] -------------
+    % 转换到 LAB 颜色空间，仅对 L (亮度) 通道进行 CLAHE 处理，防止色彩失真
+    labImg = rgb2lab(originalImg);
+    L_channel = labImg(:,:,1) / 100;
+    % ClipLimit 控制对比度放大的阈值，防止噪声过度放大
+    L_clahe = adapthisteq(L_channel, 'NumTiles', [8 8], 'ClipLimit', 0.015);
+    labImg(:,:,1) = L_clahe * 100;
+    enhImg = lab2rgb(labImg);
+    enhImg_uint8 = im2uint8(enhImg);
+    
+    % ------------- [模块B: 边缘保留平滑 (各向异性扩散)] -------------
+    % 使用 imdiffusefilt 抑制细胞/MRI背景中的高频散粒噪声，同时保留病灶锐利边缘
+    % 迭代次数3次，梯度阈值自适应
+    diffuseImg = imdiffusefilt(enhImg_uint8, 'NumberOfIterations', 3, 'ConductionMethod', 'exponential');
+    
+    % ------------- [模块C: 非刚性数据增强 (弹性形变)] -------------
+    % 医疗图像中细胞和肿瘤的形态是随机的，弹性形变(Elastic Deformation)是极其强大的防过拟合手段
+    [h, w, ~] = size(originalImg);
+    alpha = 30;  % 形变强度
+    sigma = 8;   % 平滑高斯核的标准差
+    
+    % 生成平滑的随机位移场
+    dx = imgaussfilt(randn(h, w) * alpha, sigma);
+    dy = imgaussfilt(randn(h, w) * alpha, sigma);
+    [X, Y] = meshgrid(1:w, 1:h);
+    D = cat(3, dx, dy);
+    % 应用位移场进行图像重映射
+    elasticImg = imwarp(diffuseImg, D, 'SmoothEdges', true, 'Interp', 'cubic');
+    
+    % ------------- [模块D: 伪特征注意力蒸馏 (Gabor 纹理融合)] -------------
+    % 提取灰度图像用于结构分析
+    grayImg = rgb2gray(diffuseImg);
+    
+    % 提取多尺度、多方向纹理幅值
+    [mag, ~] = imgaborfilt(grayImg, gaborBank);
+    
+    % 跨通道/尺度聚合：取各个方向和尺度响应的最大值，形成局部结构显著性图
+    maxMag = max(mag, [], 3);
+    maxMag = mat2gray(maxMag); % 归一化到 [0,1]
+    
+    % 将显著性图作为 Alpha 蒙版，与增强后的原图融合 (引导模型聚焦高频纹理区域)
+    distillImg = imfuse(diffuseImg, uint8(maxMag * 255), 'blend', 'Scaling', 'joint');
+    
+    % ------------- 3. 存储输出 -------------
+    % 1. 基础增强版 (CLAHE + 去噪)
+    imwrite(diffuseImg, fullfile(cfg.outputDir, [name, '_base', ext]));
+    % 2. 弹性形变版 (提高形态鲁棒性)
+    imwrite(elasticImg, fullfile(cfg.outputDir, [name, '_elastic', ext]));
+    % 3. 纹理蒸馏版 (结构先验注入)
+    imwrite(distillImg, fullfile(cfg.outputDir, [name, '_distill', ext]));
+    
+end
+
+fprintf('全部高阶预处理与蒸馏完成！\n');

@@ -1,0 +1,17 @@
+# BCCD Blood Cell Detection Dataset
+# 训练命令示例: yolo train model=yolov8_PATConvC3k2.yaml data=BCCD.yaml epochs=100 imgsz=640
+
+# 1. 数据集根目录路径 (建议使用绝对路径，或者相对于 ultralytics 运行目录的相对路径)
+path: E:\Deeplearning\Datasets\BCCD
+
+# 2. 训练、验证、测试集的图像路径 (相对于 path)
+train: E:\Deeplearning\Datasets\BCCD\datasets\train
+val: E:\Deeplearning\Datasets\BCCD\datasets\val
+test: E:\Deeplearning\Datasets\BCCD\datasets\test
+
+# 3. 类别信息
+nc: 3  # 类别数量 (WBC, RBC, Platelets)
+names:
+  0: WBC        # 白细胞
+  1: RBC        # 红细胞
+  2: Platelets  # 血小板
