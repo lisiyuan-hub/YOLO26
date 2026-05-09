@@ -1,7 +1,9 @@
-from mmdet.models.builder import BACKBONES as det_BACKBONES
+import inspect
 import os
 import sys
-import inspect
+
+from mmdet.models.builder import BACKBONES as det_BACKBONES
+
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parent_parentdir = os.path.dirname(os.path.dirname(currentdir))
 sys.path.insert(0, parent_parentdir)
@@ -15,11 +17,12 @@ def PartialNet_s(**kwargs):
         embed_dim=128,
         depths=(1, 2, 13, 2),
         drop_path_rate=0.15,
-        act_layer='RELU',
+        act_layer="RELU",
         fork_feat=True,
-        **kwargs
-        )
+        **kwargs,
+    )
     return model
+
 
 @det_BACKBONES.register_module()
 def PartialNet_m(**kwargs):
@@ -28,11 +31,12 @@ def PartialNet_m(**kwargs):
         embed_dim=144,
         depths=(3, 4, 18, 3),
         drop_path_rate=0.2,
-        act_layer='RELU',
+        act_layer="RELU",
         fork_feat=True,
-        **kwargs
-        )
+        **kwargs,
+    )
     return model
+
 
 @det_BACKBONES.register_module()
 def PartialNet_l(**kwargs):
@@ -41,8 +45,8 @@ def PartialNet_l(**kwargs):
         embed_dim=192,
         depths=(3, 4, 18, 3),
         drop_path_rate=0.3,
-        act_layer='RELU',
+        act_layer="RELU",
         fork_feat=True,
-        **kwargs
-        )
+        **kwargs,
+    )
     return model
