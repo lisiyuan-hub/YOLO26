@@ -1,18 +1,20 @@
-import torch
-import yaml
 import time
 from argparse import Namespace
+
+import torch
 import torch.distributed as dist
-from pytorch_lightning.utilities import rank_zero_only
+import yaml
 from fvcore.nn import FlopCountAnalysis, parameter_count
+from pytorch_lightning.utilities import rank_zero_only
 
 
 def load_cfg(cfg):
     hyp = None
     if isinstance(cfg, str):
-        with open(cfg, errors='ignore') as f:
+        with open(cfg, errors="ignore") as f:
             hyp = yaml.safe_load(f)  # load hyps dict
     return Namespace(**hyp)
+
 
 def merge_args_cfg(args, cfg):
     dict0 = vars(args)
@@ -21,14 +23,17 @@ def merge_args_cfg(args, cfg):
 
     return Namespace(**dict)
 
-def str2list(string, sperator=','):
-    li = list(map(int, string.split(sperator)))
+
+def str2list(string, separator=","):
+    li = list(map(int, string.split(separator)))
     return li
+
 
 @torch.no_grad()
 @rank_zero_only
 def print_model(model):
     print(model)
+
 
 @torch.no_grad()
 def replace_layers(model, old, new):
@@ -41,17 +46,18 @@ def replace_layers(model, old, new):
             ## simple module
             setattr(model, n, new())
 
+
 @torch.no_grad()
 def get_flops_params(model, input_size):
     model.eval()
 
-    tensor = (torch.rand(1, 3, input_size, input_size), )
+    tensor = (torch.rand(1, 3, input_size, input_size),)
     flops = FlopCountAnalysis(model, tensor)
-    flops = flops.total() / 1000000.
+    flops = flops.total() / 1000000.0
     print("FVcore FLOPs(M): ", flops)
 
     params = parameter_count(model)
-    params = params[""] / 1000000.
+    params = params[""] / 1000000.0
     print("FVcore params(M): ", params)
 
     return flops, params
@@ -62,7 +68,7 @@ def measure_latency(images, model, GPU=True, chan_last=False, half=False, num_th
     """
     :param images: b, c, h, w
     :param model: model
-    :param GPU: whther use GPU
+    :param GPU: whether use GPU
     :param chan_last: data_format
     :param half: half precision
     :param num_threads: for cpu
@@ -120,6 +126,7 @@ def measure_latency(images, model, GPU=True, chan_last=False, half=False, num_th
         print(f"batch_size {batch_size} latency on cpu {latency} ms")
 
         return throughput, latency
+
 
 def is_dist_avail_and_initialized():
     if not dist.is_available():
