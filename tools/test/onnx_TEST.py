@@ -1,11 +1,13 @@
+import time
+
 import cv2
 import numpy as np
 import onnxruntime as ort
-import time
 
 # 1. 加载模型
-onnx_path = r'E:\Deeplearning\yolo26\ultralytics-8.4.16\runs\BCCD\exp1_CCFM_Ghost_EUCB_DetectStrong\weights\best.onnx'
-session = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
+onnx_path = r"E:\Deeplearning\yolo26\ultralytics-8.4.16\runs\BCCD\exp1_CCFM_Ghost_EUCB_DetectStrong\weights\best.onnx"
+session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
+
 
 def predict_onnx(image_path, iterations=50):
     # 准备图片
@@ -36,5 +38,6 @@ def predict_onnx(image_path, iterations=50):
     print(f"推理 FPS: {fps:.2f}")
     print("-" * 30)
 
+
 # 执行测试
-predict_onnx(r'E:\Deeplearning\yolo26\ultralytics-8.4.16\BCCD_Dataset-master\test\aug2_y547.jpg')
+predict_onnx(r"E:\Deeplearning\yolo26\ultralytics-8.4.16\BCCD_Dataset-master\test\aug2_y547.jpg")
