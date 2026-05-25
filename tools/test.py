@@ -1,53 +1,127 @@
-import urllib
-import time
-import sys
-import numpy as np
-import cv2
 import platform
+
+import cv2
+import numpy as np
 from rknnlite.api import RKNNLite
 
-RK3566_RK3568_RKNN_MODEL = 'yolov5s_for_rk3566_rk3568.rknn'
-RK3588_RKNN_MODEL = 'yolov5s_for_rk3588.rknn'
-RK3562_RKNN_MODEL = 'yolov5s_for_rk3562.rknn'
-IMG_PATH = './bus.jpg'
+RK3566_RK3568_RKNN_MODEL = "yolov5s_for_rk3566_rk3568.rknn"
+RK3588_RKNN_MODEL = "yolov5s_for_rk3588.rknn"
+RK3562_RKNN_MODEL = "yolov5s_for_rk3562.rknn"
+IMG_PATH = "./bus.jpg"
 
 OBJ_THRESH = 0.25
 NMS_THRESH = 0.45
 IMG_SIZE = 640
 
-CLASSES = ("person", "bicycle", "car", "motorbike ", "aeroplane ", "bus ", "train", "truck ", "boat", "traffic light",
-           "fire hydrant", "stop sign ", "parking meter", "bench", "bird", "cat", "dog ", "horse ", "sheep", "cow", "elephant",
-           "bear", "zebra ", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite",
-           "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife ",
-           "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza ", "donut", "cake", "chair", "sofa",
-           "pottedplant", "bed", "diningtable", "toilet ", "tvmonitor", "laptop	", "mouse	", "remote ", "keyboard ", "cell phone", "microwave ",
-           "oven ", "toaster", "sink", "refrigerator ", "book", "clock", "vase", "scissors ", "teddy bear ", "hair drier", "toothbrush ")
+CLASSES = (
+    "person",
+    "bicycle",
+    "car",
+    "motorbike ",
+    "aeroplane ",
+    "bus ",
+    "train",
+    "truck ",
+    "boat",
+    "traffic light",
+    "fire hydrant",
+    "stop sign ",
+    "parking meter",
+    "bench",
+    "bird",
+    "cat",
+    "dog ",
+    "horse ",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra ",
+    "giraffe",
+    "backpack",
+    "umbrella",
+    "handbag",
+    "tie",
+    "suitcase",
+    "frisbee",
+    "skis",
+    "snowboard",
+    "sports ball",
+    "kite",
+    "baseball bat",
+    "baseball glove",
+    "skateboard",
+    "surfboard",
+    "tennis racket",
+    "bottle",
+    "wine glass",
+    "cup",
+    "fork",
+    "knife ",
+    "spoon",
+    "bowl",
+    "banana",
+    "apple",
+    "sandwich",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza ",
+    "donut",
+    "cake",
+    "chair",
+    "sofa",
+    "pottedplant",
+    "bed",
+    "diningtable",
+    "toilet ",
+    "tvmonitor",
+    "laptop	",
+    "mouse	",
+    "remote ",
+    "keyboard ",
+    "cell phone",
+    "microwave ",
+    "oven ",
+    "toaster",
+    "sink",
+    "refrigerator ",
+    "book",
+    "clock",
+    "vase",
+    "scissors ",
+    "teddy bear ",
+    "hair drier",
+    "toothbrush ",
+)
 
 # decice tree for rk356x/rk3588
-DEVICE_COMPATIBLE_NODE = '/proc/device-tree/compatible'
+DEVICE_COMPATIBLE_NODE = "/proc/device-tree/compatible"
+
 
 def get_host():
     # get platform and device type
     system = platform.system()
     machine = platform.machine()
-    os_machine = system + '-' + machine
-    if os_machine == 'Linux-aarch64':
+    os_machine = system + "-" + machine
+    if os_machine == "Linux-aarch64":
         try:
             with open(DEVICE_COMPATIBLE_NODE) as f:
                 device_compatible_str = f.read()
-                if 'rk3588' in device_compatible_str:
-                    host = 'RK3588'
-                elif 'rk3562' in device_compatible_str:
-                    host = 'RK3562'
+                if "rk3588" in device_compatible_str:
+                    host = "RK3588"
+                elif "rk3562" in device_compatible_str:
+                    host = "RK3562"
                 else:
-                    host = 'RK3566_RK3568'
-        except IOError:
-            print('Read device node {} failed.'.format(DEVICE_COMPATIBLE_NODE))
+                    host = "RK3566_RK3568"
+        except OSError:
+            print(f"Read device node {DEVICE_COMPATIBLE_NODE} failed.")
             exit(-1)
     else:
         host = os_machine
     return host
-    
+
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
@@ -73,7 +147,7 @@ def process(input, mask, anchors):
 
     box_class_probs = sigmoid(input[..., 5:])
 
-    box_xy = sigmoid(input[..., :2])*2 - 0.5
+    box_xy = sigmoid(input[..., :2]) * 2 - 0.5
 
     col = np.tile(np.arange(0, grid_w), grid_w).reshape(-1, grid_w)
     row = np.tile(np.arange(0, grid_h).reshape(-1, 1), grid_h)
@@ -81,9 +155,9 @@ def process(input, mask, anchors):
     row = row.reshape(grid_h, grid_w, 1, 1).repeat(3, axis=-2)
     grid = np.concatenate((col, row), axis=-1)
     box_xy += grid
-    box_xy *= int(IMG_SIZE/grid_h)
+    box_xy *= int(IMG_SIZE / grid_h)
 
-    box_wh = pow(sigmoid(input[..., 2:4])*2, 2)
+    box_wh = pow(sigmoid(input[..., 2:4]) * 2, 2)
     box_wh = box_wh * anchors
 
     box = np.concatenate((box_xy, box_wh), axis=-1)
@@ -119,7 +193,7 @@ def filter_boxes(boxes, box_confidences, box_class_probs):
 
     boxes = boxes[_class_pos]
     classes = classes[_class_pos]
-    scores = (class_max_score* box_confidences)[_class_pos]
+    scores = (class_max_score * box_confidences)[_class_pos]
 
     return boxes, classes, scores
 
@@ -165,8 +239,7 @@ def nms_boxes(boxes, scores):
 
 def yolov5_post_process(input_data):
     masks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
-    anchors = [[10, 13], [16, 30], [33, 23], [30, 61], [62, 45],
-               [59, 119], [116, 90], [156, 198], [373, 326]]
+    anchors = [[10, 13], [16, 30], [33, 23], [30, 61], [62, 45], [59, 119], [116, 90], [156, 198], [373, 326]]
 
     boxes, classes, scores = [], [], []
     for input, mask in zip(input_data, masks):
@@ -216,18 +289,15 @@ def draw(image, boxes, scores, classes):
     """
     for box, score, cl in zip(boxes, scores, classes):
         top, left, right, bottom = box
-        print('class: {}, score: {}'.format(CLASSES[cl], score))
-        print('box coordinate left,top,right,down: [{}, {}, {}, {}]'.format(top, left, right, bottom))
+        print(f"class: {CLASSES[cl]}, score: {score}")
+        print(f"box coordinate left,top,right,down: [{top}, {left}, {right}, {bottom}]")
         top = int(top)
         left = int(left)
         right = int(right)
         bottom = int(bottom)
 
         cv2.rectangle(image, (top, left), (right, bottom), (255, 0, 0), 2)
-        cv2.putText(image, '{0} {1:.2f}'.format(CLASSES[cl], score),
-                    (top, left - 6),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6, (0, 0, 255), 2)
+        cv2.putText(image, f"{CLASSES[cl]} {score:.2f}", (top, left - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
 
 def letterbox(im, new_shape=(640, 640), color=(0, 0, 0)):
@@ -241,7 +311,7 @@ def letterbox(im, new_shape=(640, 640), color=(0, 0, 0)):
 
     # Compute padding
     ratio = r, r  # width, height ratios
-    new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+    new_unpad = round(shape[1] * r), round(shape[0] * r)
     dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
 
     dw /= 2  # divide padding into 2 sides
@@ -249,70 +319,69 @@ def letterbox(im, new_shape=(640, 640), color=(0, 0, 0)):
 
     if shape[::-1] != new_unpad:  # resize
         im = cv2.resize(im, new_unpad, interpolation=cv2.INTER_LINEAR)
-    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+    top, bottom = round(dh - 0.1), round(dh + 0.1)
+    left, right = round(dw - 0.1), round(dw + 0.1)
     im = cv2.copyMakeBorder(im, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
     return im, ratio, (dw, dh)
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     host_name = get_host()
-    if host_name == 'RK3566_RK3568':
+    if host_name == "RK3566_RK3568":
         rknn_model = RK3566_RK3568_RKNN_MODEL
-    elif host_name == 'RK3562':
+    elif host_name == "RK3562":
         rknn_model = RK3562_RKNN_MODEL
-    elif host_name == 'RK3588':
+    elif host_name == "RK3588":
         rknn_model = RK3588_RKNN_MODEL
     else:
-        print("This demo cannot run on the current platform: {}".format(host_name))
+        print(f"This demo cannot run on the current platform: {host_name}")
         exit(-1)
-        
+
     # Create RKNN object
     rknn_lite = RKNNLite()
 
-	  # load RKNN model
-    print('--> Load RKNN model')
+    # load RKNN model
+    print("--> Load RKNN model")
     ret = rknn_lite.load_rknn(rknn_model)
     if ret != 0:
-        print('Load RKNN model failed')
+        print("Load RKNN model failed")
         exit(ret)
-    print('done')
+    print("done")
 
     # Init runtime environment
-    print('--> Init runtime environment')
+    print("--> Init runtime environment")
     # run on RK356x/RK3588 with Debian OS, do not need specify target.
-    if host_name == 'RK3588':
+    if host_name == "RK3588":
         ret = rknn_lite.init_runtime(core_mask=RKNNLite.NPU_CORE_0)
     else:
         ret = rknn_lite.init_runtime()
     if ret != 0:
-        print('Init runtime environment failed!')
+        print("Init runtime environment failed!")
         exit(ret)
-    print('done')
+    print("done")
 
     # Set inputs
     img = cv2.imread(IMG_PATH)
-    #img, ratio, (dw, dh) = letterbox(img, new_shape=(IMG_SIZE, IMG_SIZE))
+    # img, ratio, (dw, dh) = letterbox(img, new_shape=(IMG_SIZE, IMG_SIZE))
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
 
     # Inference
-    print('--> Running model')
+    print("--> Running model")
     outputs = rknn_lite.inference(inputs=[img])
-    #np.save('./onnx_yolov5_0.npy', outputs[0])
-    #np.save('./onnx_yolov5_1.npy', outputs[1])
-    #np.save('./onnx_yolov5_2.npy', outputs[2])
-    print('done')
+    # np.save('./onnx_yolov5_0.npy', outputs[0])
+    # np.save('./onnx_yolov5_1.npy', outputs[1])
+    # np.save('./onnx_yolov5_2.npy', outputs[2])
+    print("done")
 
     # post process
     input0_data = outputs[0]
     input1_data = outputs[1]
     input2_data = outputs[2]
 
-    input0_data = input0_data.reshape([3, -1]+list(input0_data.shape[-2:]))
-    input1_data = input1_data.reshape([3, -1]+list(input1_data.shape[-2:]))
-    input2_data = input2_data.reshape([3, -1]+list(input2_data.shape[-2:]))
+    input0_data = input0_data.reshape([3, -1, *list(input0_data.shape[-2:])])
+    input1_data = input1_data.reshape([3, -1, *list(input1_data.shape[-2:])])
+    input2_data = input2_data.reshape([3, -1, *list(input2_data.shape[-2:])])
 
     input_data = list()
     input_data.append(np.transpose(input0_data, (2, 3, 0, 1)))
@@ -327,9 +396,8 @@ if __name__ == '__main__':
 
     # show output
     cv2.imwrite("out.jpg", img_1)
-    #cv2.imshow("post process result", img_1)
-    #cv2.waitKey(0)
-    #cv2.destroyAllWindows()
+    # cv2.imshow("post process result", img_1)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
     rknn_lite.release()
-
