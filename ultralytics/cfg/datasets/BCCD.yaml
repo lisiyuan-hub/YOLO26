@@ -10,8 +10,8 @@ val: E:\Deeplearning\Datasets\BCCD\datasets\val
 test: E:\Deeplearning\Datasets\BCCD\datasets\test
 
 # 3. 类别信息
-nc: 3  # 类别数量 (WBC, RBC, Platelets)
+nc: 3 # 类别数量 (WBC, RBC, Platelets)
 names:
-  0: WBC        # 白细胞
-  1: RBC        # 红细胞
-  2: Platelets  # 血小板
+  0: WBC # 白细胞
+  1: RBC # 红细胞
+  2: Platelets # 血小板
