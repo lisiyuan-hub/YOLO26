@@ -1,70 +1,65 @@
 import math
+
 import torch
 import torch.nn as nn
+
 from ultralytics.nn.modules import C3k2
 from ultralytics.nn.modules.block import C3k, PSABlock
- 
-__all__ = ['EVA','C3k2_EVA']
- 
+
+__all__ = ["EVA", "C3k2_EVA"]
+
+
 class DWConv(nn.Module):
     def __init__(self, dim=768, kernel_size=3, stride=1, padding=1, dilation=1, bias=True):
-        super(DWConv, self).__init__()
+        super().__init__()
         self.dwconv = nn.Conv2d(dim, dim, kernel_size, stride, padding, dilation, bias=bias, groups=dim)
- 
+
     def forward(self, x):
         x = self.dwconv(x)
         return x
+
+
 class PWConv(nn.Module):
     def __init__(self, in_channels=768, out_channels=None, bias=True):
-        super(PWConv, self).__init__()
+        super().__init__()
         out_channels = out_channels or in_channels
         self.pwconv = nn.Conv2d(in_channels, out_channels, 1, bias=bias)
- 
+
     def forward(self, x):
         x = self.pwconv(x)
         return x
+
+
 class CKS(nn.Module):
     def __init__(self, dim, dwconv=DWConv, pwconv=PWConv):
         super().__init__()
         hidden_channel = max(dim // 16, 32)
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc_reduce = nn.Sequential(
-            pwconv(dim, hidden_channel),
-            dwconv(hidden_channel),
-            nn.BatchNorm2d(hidden_channel),
-            nn.ReLU(inplace=True)
+            pwconv(dim, hidden_channel), dwconv(hidden_channel), nn.BatchNorm2d(hidden_channel), nn.ReLU(inplace=True)
         )
         self.fc_expand_small = nn.Sequential(
-            pwconv(hidden_channel, dim),
-            dwconv(dim),
-            nn.BatchNorm2d(dim),
-            nn.ReLU(inplace=True)
+            pwconv(hidden_channel, dim), dwconv(dim), nn.BatchNorm2d(dim), nn.ReLU(inplace=True)
         )
         self.fc_expand_big_h = nn.Sequential(
-            pwconv(hidden_channel, dim),
-            dwconv(dim),
-            nn.BatchNorm2d(dim),
-            nn.ReLU(inplace=True)
+            pwconv(hidden_channel, dim), dwconv(dim), nn.BatchNorm2d(dim), nn.ReLU(inplace=True)
         )
         self.fc_expand_big_v = nn.Sequential(
-            pwconv(hidden_channel, dim),
-            dwconv(dim),
-            nn.BatchNorm2d(dim),
-            nn.ReLU(inplace=True)
+            pwconv(hidden_channel, dim), dwconv(dim), nn.BatchNorm2d(dim), nn.ReLU(inplace=True)
         )
         self.conv_squeeze = nn.Conv2d(2, 3, 7, padding=3)
- 
+
     def norm_weight_channel(self, sig_small, sig_big_h, sig_big_v):
         sig_small = torch.sigmoid(sig_small)
         sig_big_h = torch.sigmoid(sig_big_h)
         sig_big_v = torch.sigmoid(sig_big_v)
         return sig_small, sig_big_h, sig_big_v
- 
+
     def norm_weight_spatial(self, sig):
         sig = torch.sigmoid(sig)
         sig_small, sig_big_h, sig_big_v = torch.chunk(sig, chunks=3, dim=1)
         return sig_small, sig_big_h, sig_big_v
- 
+
     def forward(self, attn_small, attn_big_h, attn_big_v):
         attn = attn_small + attn_big_h + attn_big_v
         feats_S = self.avg_pool(attn)
@@ -72,18 +67,22 @@ class CKS(nn.Module):
         sig_small_channel = self.fc_expand_small(feats_Z)
         sig_big_h_channel = self.fc_expand_big_h(feats_Z)
         sig_big_v_channel = self.fc_expand_big_v(feats_Z)
-        sig_small_channel, sig_big_h_channel, sig_big_v_channel = self.norm_weight_channel(sig_small_channel,
-                                                                                           sig_big_h_channel,
-                                                                                           sig_big_v_channel)
+        sig_small_channel, sig_big_h_channel, sig_big_v_channel = self.norm_weight_channel(
+            sig_small_channel, sig_big_h_channel, sig_big_v_channel
+        )
         avg_attn = torch.mean(attn, dim=1, keepdim=True)
         max_attn, _ = torch.max(attn, dim=1, keepdim=True)
         agg = torch.cat([avg_attn, max_attn], dim=1)
         sig = self.conv_squeeze(agg)
         sig_small, sig_big_h, sig_big_v = self.norm_weight_spatial(sig)
-        attn = attn_small * sig_small_channel * sig_small + attn_big_h * sig_big_h_channel * sig_big_h + attn_big_v * sig_big_v_channel * sig_big_v
+        attn = (
+            attn_small * sig_small_channel * sig_small
+            + attn_big_h * sig_big_h_channel * sig_big_h
+            + attn_big_v * sig_big_v_channel * sig_big_v
+        )
         return attn
- 
- 
+
+
 class SDLSKA(nn.Module):
     def __init__(self, dim, kernel_size, dwconv=DWConv, pwconv=PWConv):
         super().__init__()
@@ -105,7 +104,7 @@ class SDLSKA(nn.Module):
             self.DW_D_conv_v = dwconv(dim, kernel_size=(11, 1), stride=(1, 1), padding=(15, 0), dilation=3)
         self.pwconv = pwconv(dim)
         self.FS_kernel = CKS(dim, dwconv=DWConv, pwconv=PWConv)
- 
+
     def forward(self, x):
         u = x.clone()
         attn_small = self.DW_conv(x)
@@ -114,11 +113,19 @@ class SDLSKA(nn.Module):
         attn = self.FS_kernel(attn_small, attn_big_h, attn_big_v)
         attn = self.pwconv(attn)
         return u * attn
- 
- 
+
+
 class MLP(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None, dwconv=DWConv, pwconv=PWConv,
-                 act_layer=nn.GELU, drop=0.):
+    def __init__(
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        dwconv=DWConv,
+        pwconv=PWConv,
+        act_layer=nn.GELU,
+        drop=0.0,
+    ):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -128,10 +135,10 @@ class MLP(nn.Module):
         self.fc2 = pwconv(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
         self.apply(self._init_weights)
- 
+
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
-            nn.init.trunc_normal_(m.weight, std=.02)
+            nn.init.trunc_normal_(m.weight, std=0.02)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
@@ -143,7 +150,7 @@ class MLP(nn.Module):
             nn.init.normal_(m.weight, 0, math.sqrt(2.0 / fan_out))
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
- 
+
     def forward(self, x):
         x = self.fc1(x)
         x = self.dwconv(x)
@@ -152,8 +159,8 @@ class MLP(nn.Module):
         x = self.fc2(x)
         x = self.drop(x)
         return x
- 
- 
+
+
 class SpatialAttention(nn.Module):
     def __init__(self, lka, d_model, kernel_size, dwconv=DWConv, pwconv=PWConv):
         super().__init__()
@@ -161,24 +168,24 @@ class SpatialAttention(nn.Module):
         self.activation = nn.GELU()
         self.spatial_gating_unit = lka(d_model, kernel_size, dwconv=dwconv, pwconv=pwconv)
         self.proj_2 = pwconv(d_model, d_model)
- 
+
     def forward(self, x):
-        shorcut = x.clone()
+        shortcut = x.clone()
         x = self.proj_1(x)
         x = self.activation(x)
         x = self.spatial_gating_unit(x)
         x = self.proj_2(x)
-        x = x + shorcut
+        x = x + shortcut
         return x
- 
- 
+
+
 class DropPath(nn.Module):
     def __init__(self, drop_prob=None):
-        super(DropPath, self).__init__()
+        super().__init__()
         self.drop_prob = drop_prob
- 
-    def drop_path(self, x, drop_prob: float = 0., training: bool = False):
-        if drop_prob == 0. or not training:
+
+    def drop_path(self, x, drop_prob: float = 0.0, training: bool = False):
+        if drop_prob == 0.0 or not training:
             return x
         keep_prob = 1 - drop_prob
         shape = (x.shape[0],) + (1,) * (x.ndim - 1)
@@ -186,33 +193,41 @@ class DropPath(nn.Module):
         random_tensor.floor_()
         output = x.div(keep_prob) * random_tensor
         return output
- 
+
     def forward(self, x):
         return self.drop_path(x, self.drop_prob, self.training)
- 
- 
+
+
 class EVA(nn.Module):
     """Implementation of Efficient Visual Attention Network Block."""
- 
-    def __init__(self, dim, kernel_size=35, lka=SDLSKA, dwconv=DWConv, pwconv=PWConv, mlp_expand=4., drop=0.,
-                 drop_path=0., act_layer=nn.GELU):
+
+    def __init__(
+        self,
+        dim,
+        kernel_size=35,
+        lka=SDLSKA,
+        dwconv=DWConv,
+        pwconv=PWConv,
+        mlp_expand=4.0,
+        drop=0.0,
+        drop_path=0.0,
+        act_layer=nn.GELU,
+    ):
         super().__init__()
         self.norm1 = nn.BatchNorm2d(dim)
         self.attn = SpatialAttention(lka, dim, kernel_size, dwconv=dwconv, pwconv=pwconv)
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
         self.norm2 = nn.BatchNorm2d(dim)
         mlp_hidden_dim = int(dim * mlp_expand)
         self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
         layer_scale_init_value = 1e-2
-        self.layer_scale_1 = nn.Parameter(
-            layer_scale_init_value * torch.ones((dim)), requires_grad=True)
-        self.layer_scale_2 = nn.Parameter(
-            layer_scale_init_value * torch.ones((dim)), requires_grad=True)
+        self.layer_scale_1 = nn.Parameter(layer_scale_init_value * torch.ones(dim), requires_grad=True)
+        self.layer_scale_2 = nn.Parameter(layer_scale_init_value * torch.ones(dim), requires_grad=True)
         self.apply(self._init_weights)
- 
+
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
-            nn.init.trunc_normal_(m.weight, std=.02)
+            nn.init.trunc_normal_(m.weight, std=0.02)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
@@ -224,23 +239,33 @@ class EVA(nn.Module):
             nn.init.normal_(m.weight, 0, math.sqrt(2.0 / fan_out))
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
- 
+
     def forward(self, x):
         x = x + self.drop_path(self.layer_scale_1.unsqueeze(-1).unsqueeze(-1) * self.attn(self.norm1(x)))
         x = x + self.drop_path(self.layer_scale_2.unsqueeze(-1).unsqueeze(-1) * self.mlp(self.norm2(x)))
         return x
- 
- 
+
+
 class C3k_EVA(C3k):
     def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5, k=3):
         super().__init__(c1, c2, n, shortcut, g, e, k)
         c_ = int(c2 * e)  # hidden channels
         # kernel_size可以自由去定义去跑消融实验：7,11,23,35
         self.m = nn.Sequential(*(EVA(c_, kernel_size=7) for _ in range(n)))
- 
-class C3k2_EVA(C3k2): # kernel_size可以自由去定义去跑消融实验：7,11,23,35
-    def __init__(self, c1: int, c2: int, n: int = 1, c3k: bool = False, e: float = 0.5, attn: bool = False,
-                 g: int = 1, shortcut: bool = True, ):
+
+
+class C3k2_EVA(C3k2):  # kernel_size可以自由去定义去跑消融实验：7,11,23,35
+    def __init__(
+        self,
+        c1: int,
+        c2: int,
+        n: int = 1,
+        c3k: bool = False,
+        e: float = 0.5,
+        attn: bool = False,
+        g: int = 1,
+        shortcut: bool = True,
+    ):
         super().__init__(c1, c2, n, shortcut, g, e)
         self.m = nn.ModuleList(
             nn.Sequential(
