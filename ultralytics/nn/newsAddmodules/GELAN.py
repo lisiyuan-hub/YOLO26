@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+
 from ultralytics.nn.modules.conv import Conv
 
 
@@ -13,7 +14,7 @@ class GELAN(nn.Module):
         self.cv3 = Conv(c_ * 2, c2, 1)
         self.m = nn.ModuleList([Conv(c_, c_, 3, 1, g=g) for _ in range(n)])
         self.gap = nn.AdaptiveAvgPool2d(1)  # 全局池化
-        
+
     def forward(self, x):
         y1 = self.cv1(x)
         y2 = self.cv2(x).chunk(2, 1)[0]  # 通道拆分
